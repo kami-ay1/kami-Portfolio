@@ -4,7 +4,7 @@
  * 3D 键盘画布 —— 本站核心组件（架构参考 nareshkhatri.dev，做了适配与简化）。
  *
  * 分工：
- *   Spline 场景（public/assets/keyboard.spline）只负责"物"：
+ *   Spline 场景（public/assets/keyboard.splinecode）只负责"物"：
  *     - 名为 "keyboard" 的整组对象（滚动叙事的操作对象）
  *     - 每个键帽以技能名命名（js / ts / react ...，见 src/data/skills.ts）
  *   本组件负责"逻辑"：
@@ -13,8 +13,10 @@
  *     3. GSAP ScrollTrigger 驱动键盘在各章节间的 transform（滚动叙事）
  *     4. 入场编排、DPR 钳制、后台标签页暂停渲染
  *
- * 场景制作见 SPLINE-GUIDE.md。场景文件缺失时本组件完全不渲染，
- * 技能区自动退化为 HTML 网格（见 sections/skills.tsx）。
+ * ⚠️ 时序要点（runtime 1.12.98 实测）：onLoad 触发时实体树可能还是空的
+ * （要等 wasm 从 unpkg 拉取完成后才构建）。所以所有依赖场景对象的初始化
+ * 都由 sceneReady 门闩控制——轮询到 keyboard 对象真正出现才执行。
+ * 原作者锁定的 runtime 1.12.0 没有这个行为，升级需注意。
  */
 import React, { Suspense, useEffect, useRef, useState } from "react";
 import type { Application, SplineEvent } from "@splinetool/runtime";
@@ -39,6 +41,8 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
   const [activeSection, setActiveSection] = useState<Section>("hero");
   const [keyboardRevealed, setKeyboardRevealed] = useState(false);
+  /** sceneReady：keyboard 对象已出现、实体树可用 */
+  const [sceneReady, setSceneReady] = useState(false);
 
   const selectedSkillRef = useRef<Skill | null>(null);
   const keycapAnimationsRef = useRef<{
@@ -47,6 +51,18 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
   } | null>(null);
 
   const { playPress, playRelease } = useKeycapSound();
+
+  /**
+   * 对象查找：findObjectByName 优先，getAllObjects 全树扫描兜底。
+   * 注意在实体树就绪前两者都会扑空——就绪判断用下面的 sceneReady。
+   */
+  const findObj = (name: string) => {
+    if (!splineApp) return undefined;
+    return (
+      splineApp.findObjectByName(name) ??
+      splineApp.getAllObjects().find((o) => o.name === name)
+    );
+  };
 
   /** 场景变量是可选契约：场景里定义了 heading/desc 就同步写入，没定义就走 HTML 浮层 */
   const trySetVariable = (name: string, value: string) => {
@@ -129,7 +145,7 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
     prevSection: Section,
     start = "top 50%"
   ) => {
-    const kbd = splineApp?.findObjectByName("keyboard");
+    const kbd = findObj("keyboard");
     if (!kbd) return null;
 
     const applyState = (section: Section) => {
@@ -158,7 +174,7 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
   };
 
   const setupScrollAnimations = (): gsap.core.Timeline[] => {
-    const kbd = splineApp?.findObjectByName("keyboard");
+    const kbd = findObj("keyboard");
     if (!kbd) return [];
 
     const heroState = getKeyboardState({ section: "hero", isMobile });
@@ -182,8 +198,8 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
    * 可能杀掉新启动的 float，或让旧的 yoyo 永远停不下来。
    */
   const getKeycapsAnimation = () => {
-    if (!splineApp)
-      return { start: () => {}, stop: () => {} };
+    const noop = { start: () => {}, stop: () => {} };
+    if (!splineApp) return noop;
 
     let floatTweens: gsap.core.Tween[] = [];
     let settleTweens: gsap.core.Tween[] = [];
@@ -202,7 +218,7 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
       Object.values(SKILLS)
         .sort(() => Math.random() - 0.5)
         .forEach((skill, idx) => {
-          const keycap = splineApp.findObjectByName(skill.name);
+          const keycap = findObj(skill.name);
           if (!keycap) return;
           floatTweens.push(
             gsap.to(keycap.position, {
@@ -222,7 +238,7 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
       killFloat();
       killSettle();
       Object.values(SKILLS).forEach((skill) => {
-        const keycap = splineApp.findObjectByName(skill.name);
+        const keycap = findObj(skill.name);
         if (!keycap) return;
         settleTweens.push(
           gsap.to(keycap.position, {
@@ -247,7 +263,7 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
    *   - 技能名对象（js/react...）：只参与按键事件和 contact 漂浮，入场不动它们
    */
   const updateKeyboardTransform = async () => {
-    const kbd = splineApp?.findObjectByName("keyboard");
+    const kbd = findObj("keyboard");
     if (!kbd) return;
 
     kbd.visible = false;
@@ -258,13 +274,15 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
       section: activeSection,
       isMobile,
     });
+    gsap.set(kbd.position, currentState.position);
+    gsap.set(kbd.rotation, currentState.rotation);
     gsap.fromTo(
       kbd.scale,
       { x: 0.01, y: 0.01, z: 0.01 },
       { ...currentState.scale, duration: 1.5, ease: "elastic.out(1, 0.6)" }
     );
 
-    const allObjects = splineApp.getAllObjects();
+    const allObjects = splineApp!.getAllObjects();
     const keycaps = allObjects.filter((obj) => obj.name === "keycap");
 
     await sleep(900);
@@ -300,9 +318,32 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
 
   // ---------- Effects ----------
 
-  // 初始化：事件绑定 + 滚动时间线（卸载时全部清理，防止在已销毁的场景上触发）
+  // sceneReady 门闩：轮询等待 keyboard 对象出现（wasm 加载可能要数秒到数十秒）
   useEffect(() => {
-    if (!splineApp) return;
+    if (!splineApp || sceneReady) return;
+    let cancelled = false;
+    (async () => {
+      // 最多等 120 秒（每 250ms 一次）——CDN 慢的时候也不轻易放弃
+      for (let i = 0; i < 480; i++) {
+        const kbd =
+          splineApp.findObjectByName("keyboard") ??
+          splineApp.getAllObjects().find((o) => o.name === "keyboard");
+        if (kbd) {
+          if (!cancelled) setSceneReady(true);
+          return;
+        }
+        await sleep(250);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [splineApp, sceneReady]);
+
+  // 初始化：事件绑定 + 滚动时间线（等 sceneReady；卸载时全部清理）
+  useEffect(() => {
+    if (!splineApp || !sceneReady) return;
 
     handleSplineInteractions();
     const timelines = setupScrollAnimations();
@@ -316,18 +357,18 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
       });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [splineApp, isMobile]);
+  }, [splineApp, isMobile, sceneReady]);
 
   // 章节切换时的专属动画：hero 慢速旋转 / contact 拆解漂浮
   useEffect(() => {
-    if (!splineApp) return;
+    if (!splineApp || !sceneReady) return;
 
     // cancelled 标记：下面 await sleep 之后才执行的 start/stop 若已过期则放弃，
     // 否则快速滚动会让多次运行交叠，一次过期的 keycap start() 落在最后，
     // 漂浮动画就永远停不下来了。
     let cancelled = false;
 
-    const kbd = splineApp.findObjectByName("keyboard");
+    const kbd = findObj("keyboard");
 
     // hero：无限往复的慢速旋转（先建为 paused，按章节 restart/pause）
     const rotateKeyboard = kbd
@@ -390,7 +431,8 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
       rotateKeyboard?.kill();
       teardownKeyboard?.kill();
     };
-  }, [activeSection, splineApp]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection, splineApp, sceneReady]);
 
   // URL hash 同步（replaceState：不产生历史记录，刷新后能回到当前章节）
   // + 首次入场编排
@@ -399,11 +441,11 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
     const url = window.location.pathname + window.location.search + hash;
     window.history.replaceState(window.history.state, "", url);
 
-    if (!splineApp || keyboardRevealed) return;
+    if (!splineApp || !sceneReady || keyboardRevealed) return;
     setKeyboardRevealed(true);
     updateKeyboardTransform();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [splineApp, activeSection]);
+  }, [splineApp, sceneReady, activeSection]);
 
   // 钳制渲染倍率：Spline 导出默认按 devicePixelRatio 渲染，2-3 倍屏
   // 会渲染 1x 屏 4-9 倍的像素量。_renderer 是内部 API（变了就静默放弃）。
@@ -417,9 +459,7 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
             _renderer?: { setPixelRatio?: (n: number) => void };
           }
         )._renderer;
-        renderer?.setPixelRatio?.(
-          Math.min(window.devicePixelRatio, maxDpr)
-        );
+        renderer?.setPixelRatio?.(Math.min(window.devicePixelRatio, maxDpr));
       } catch {
         /* internal API moved —— 场景照常渲染 */
       }
