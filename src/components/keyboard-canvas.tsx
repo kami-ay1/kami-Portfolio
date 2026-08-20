@@ -237,7 +237,15 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
     return { start, stop };
   };
 
-  /** 入场编排：键盘从极小弹性放大，键帽按 70ms 阶梯延迟依次砸落 */
+  /**
+   * 入场编排：键盘从极小弹性放大，键帽按 70ms 阶梯延迟依次砸落。
+   *
+   * 场景里键帽是三组命名对象（对齐原版场景结构）：
+   *   - "keycap"：键帽主体，弹落到 y=50（原场景的静息高度，不是 0！）
+   *   - "keycap-desktop" / "keycap-mobile"：按设备显隐的变体键帽，
+   *     场景导出时默认隐藏，必须在这里显式设为可见
+   *   - 技能名对象（js/react...）：只参与按键事件和 contact 漂浮，入场不动它们
+   */
   const updateKeyboardTransform = async () => {
     const kbd = splineApp?.findObjectByName("keyboard");
     if (!kbd) return;
@@ -256,18 +264,36 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
       { ...currentState.scale, duration: 1.5, ease: "elastic.out(1, 0.6)" }
     );
 
+    const allObjects = splineApp.getAllObjects();
+    const keycaps = allObjects.filter((obj) => obj.name === "keycap");
+
     await sleep(900);
 
-    (Object.keys(SKILLS) as SkillKey[]).forEach(async (key, idx) => {
-      const keycap = splineApp?.findObjectByName(key);
-      if (!keycap) return;
+    // 先按设备放出变体键帽（场景默认藏着它们）
+    if (isMobile) {
+      allObjects
+        .filter((obj) => obj.name === "keycap-mobile")
+        .forEach((keycap) => {
+          keycap.visible = true;
+        });
+    } else {
+      allObjects
+        .filter((obj) => obj.name === "keycap-desktop")
+        .forEach(async (keycap, idx) => {
+          await sleep(idx * 70);
+          keycap.visible = true;
+        });
+    }
+
+    // 键帽主体逐个砸落（从 y=200 弹到 y=50 静息位）
+    keycaps.forEach(async (keycap, idx) => {
       keycap.visible = false;
       await sleep(idx * 70);
       keycap.visible = true;
       gsap.fromTo(
         keycap.position,
         { y: 200 },
-        { y: 0, duration: 0.5, delay: 0.1, ease: "bounce.out" }
+        { y: 50, duration: 0.5, delay: 0.1, ease: "bounce.out" }
       );
     });
   };
