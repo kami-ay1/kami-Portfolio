@@ -14,7 +14,10 @@ export function ExperienceSection() {
       <div className="mx-auto w-full max-w-4xl">
         <SectionHeader title="Experience" desc="Where I've worked" />
 
-        <ol className="relative space-y-12 border-l border-border/60 pl-8">
+        {/* 亮色模式：外层局部毛玻璃底，避免文字压在 3D 键盘上看不清；
+            暗色模式透明无感（padding 两端一致，无布局跳变） */}
+        <div className="rounded-2xl bg-background/60 p-4 backdrop-blur-md dark:bg-transparent dark:backdrop-blur-none md:p-6">
+          <ol className="relative space-y-12 border-l border-border/60 pl-8">
           {EXPERIENCE.map((exp) => (
             <li key={exp.id} className="relative">
               <span className="absolute -left-[37px] top-1.5 size-3 rounded-full border-2 border-background bg-primary" />
@@ -52,7 +55,8 @@ export function ExperienceSection() {
               </div>
             </li>
           ))}
-        </ol>
+          </ol>
+        </div>
       </div>
     </section>
   );

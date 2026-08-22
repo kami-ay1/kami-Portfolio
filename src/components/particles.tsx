@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { usePerfProfile } from "@/hooks/use-perf-profile";
 
@@ -29,6 +30,7 @@ type Particle = {
 
 export function Particles({ className }: { className?: string }) {
   const { particleCount, maxDpr, disableDecorative, ready } = usePerfProfile();
+  const { resolvedTheme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -40,6 +42,10 @@ export function Particles({ className }: { className?: string }) {
     if (!canvas || !container) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+
+    // 粒子颜色随主题：暗色下白点、亮色下深色点（否则亮色白底会隐形）
+    const dotColor =
+      resolvedTheme === "light" ? "rgba(20, 24, 46," : "rgba(255, 255, 255,";
 
     const dpr = Math.min(window.devicePixelRatio, maxDpr);
     const size = { w: 0, h: 0 };
@@ -66,7 +72,7 @@ export function Particles({ className }: { className?: string }) {
       ctx.translate(p.tx, p.ty);
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
+      ctx.fillStyle = `${dotColor} ${p.alpha})`;
       ctx.fill();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
@@ -143,7 +149,7 @@ export function Particles({ className }: { className?: string }) {
       window.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [ready, disableDecorative, particleCount, maxDpr]);
+  }, [ready, disableDecorative, particleCount, maxDpr, resolvedTheme]);
 
   if (!ready || disableDecorative || particleCount === 0) return null;
 
@@ -152,8 +158,9 @@ export function Particles({ className }: { className?: string }) {
       ref={containerRef}
       aria-hidden
       className={cn(
-        // 暗色模式下的微弱对角渐变（原站同款质感）；亮色模式被内容层盖住，无感
-        "dark:bg-gradient-to-tl dark:from-black dark:via-zinc-600/20 dark:to-black",
+        // 微弱对角渐变，随主题切换色（亮色下给白底一点层次）
+        "bg-gradient-to-tl from-white via-zinc-400/10 to-white",
+        "dark:from-black dark:via-zinc-600/20 dark:to-black",
         className
       )}
     >

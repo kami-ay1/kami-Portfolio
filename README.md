@@ -71,6 +71,18 @@ Spline 运行时会从 unpkg.com 拉取若干 wasm 模块（navmesh/modelling/bo
 若目标用户网络访问 unpkg 困难，可考虑：给站点加 Service Worker/CDN 代理这些
 请求，或改用 Spline 官方托管场景 URL（`scene` 传远程地址）。本机开发一般无碍。
 
+**留言板消息重启就丢？**
+默认是内存模式（零配置可用）。要持久保存：到 [upstash.com](https://upstash.com)
+注册（免费 1 万次请求/天）→ 创建 Redis 数据库 → 把 REST URL 和 TOKEN 填进
+`.env.local` 的 `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`，
+重启 dev server。配置后自动切换到 Redis 存储，响应里的 `storage` 字段
+会从 `memory` 变成 `redis` 可用于确认。
+
+**Node 版本注意（本机踩过）**
+本项目需要 Node ≥ 18.18（建议 20+）。本机 nvm 的全局软链曾被切到 Node 14
+导致依赖被旧 npm 污染。若 `node --version` 不是 20+，先 `nvm use 24.9.0`
+（需要管理员权限的终端；或用管理员重建软链）。
+
 **亮色模式下想完全遮住 3D（原站行为）？**
 `src/app/page.tsx` 里把 `bg-background/85` 改成 `bg-background`。
 

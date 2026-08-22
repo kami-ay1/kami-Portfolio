@@ -1,9 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { config } from "@/data/config";
 import { SectionHeader } from "../section-header";
+import { ContactModal } from "../contact-modal";
 
 export function ContactSection() {
+  const [modalOpen, setModalOpen] = useState(false);
+
   return (
     <section
       id="contact"
@@ -15,11 +19,17 @@ export function ContactSection() {
           desc="Have a project in mind? My inbox is always open."
           className="text-center [&>h2]:mx-auto"
         />
-        <a
-          href={config.social.email}
+        <button
+          onClick={() => setModalOpen(true)}
           className="inline-block rounded-full bg-primary px-10 py-4 text-lg font-semibold text-primary-foreground transition-transform hover:-translate-y-1"
         >
           Say Hello
+        </button>{" "}
+        <a
+          href={config.social.email}
+          className="ml-1 inline-block text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
+        >
+          或直接发邮件
         </a>
         <p className="mt-10 text-sm text-muted-foreground">
           © {new Date().getFullYear()} {config.author} · Built with Next.js +
@@ -34,6 +44,8 @@ export function ContactSection() {
           </a>
         </p>
       </div>
+
+      <ContactModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </section>
   );
 }

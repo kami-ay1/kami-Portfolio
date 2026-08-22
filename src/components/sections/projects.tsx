@@ -10,7 +10,7 @@ export function ProjectsSection() {
       id="projects"
       className="flex w-full min-h-screen flex-col justify-center px-6 py-24 md:px-16"
     >
-      <div className="mx-auto w-full max-w-6xl">
+      <div className="mx-auto w-full max-w-7xl">
         <SectionHeader title="Projects" desc="Things I've built" />
 
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -20,7 +20,7 @@ export function ProjectsSection() {
               href={project.href ?? "#"}
               target={project.href ? "_blank" : undefined}
               rel="noreferrer"
-              className="group flex flex-col rounded-2xl border border-border/60 bg-secondary/20 p-6 backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-foreground/30 hover:bg-secondary/40 hover:shadow-xl"
+              className="group flex flex-col rounded-2xl border border-border/60 bg-background/60 p-6 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-foreground/30 hover:bg-background/80 hover:shadow-xl dark:bg-secondary/20 dark:backdrop-blur-sm dark:hover:bg-secondary/40"
             >
               <h3 className="font-display text-xl font-bold">
                 {project.title}

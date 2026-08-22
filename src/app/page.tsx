@@ -17,10 +17,9 @@ import { ContactSection } from "@/components/sections/contact";
  *   KeyboardCanvas —— fixed 的 3D 键盘画布（z-0，全局不随滚动）
  *   main           —— HTML 内容层（在上，随滚动）
  *
- * 内容层背景说明（与原站一致）：暗色主题透明让 3D 键盘全程可见；
- * 亮色主题完全不透明（slate-100 同款色值）把 3D 和粒子整体遮住——
- * 原站的亮色模式就是纯 HTML 页面。想要"隐约透出键盘"的效果，
- * 把 bg-secondary 改成 bg-background/85 即可。
+ * 内容层背景：两种主题都全透明，3D 键盘全程清爽可见。
+ * 可读性不靠全屏白纱，而是给会压在键盘上的文字区块做局部处理：
+ * 标题加浅色光晕（text halo）、列表/卡片加局部毛玻璃底（见各 section）。
  */
 export default function MainPage() {
   useEffect(() => {
@@ -29,10 +28,10 @@ export default function MainPage() {
 
   return (
     <SmoothScroll>
-      {/* 背景三明治：暗色底(body) → 粒子(-z-10) → 3D 键盘(z-0) → 内容(上层) */}
+      {/* 背景三明治：底色(body) → 粒子(-z-10) → 3D 键盘(z-0) → 内容(上层) */}
       <Particles className="fixed inset-0 -z-10" />
       <KeyboardCanvas />
-      <main className="canvas-overlay-mode relative bg-secondary dark:bg-transparent">
+      <main className="canvas-overlay-mode relative bg-transparent">
         <HeroSection />
         <SkillsSection />
         <ExperienceSection />
