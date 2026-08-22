@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import SmoothScroll from "@/components/smooth-scroll";
 import KeyboardCanvas from "@/components/keyboard-canvas";
 import { Particles } from "@/components/particles";
+import { ElasticCursor } from "@/components/elastic-cursor";
 import { checkKeyboardScene } from "@/hooks/use-keyboard-scene";
 import { config } from "@/data/config";
 import { HeroSection } from "@/components/sections/hero";
@@ -28,6 +29,8 @@ export default function MainPage() {
 
   return (
     <SmoothScroll>
+      {/* 弹性光标（源项目同款；触屏自动禁用） */}
+      <ElasticCursor />
       {/* 背景三明治：底色(body) → 粒子(-z-10) → 3D 键盘(z-0) → 内容(上层) */}
       <Particles className="fixed inset-0 -z-10" />
       <KeyboardCanvas />

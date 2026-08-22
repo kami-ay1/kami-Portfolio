@@ -109,6 +109,7 @@ export function ContactModal({
               role="dialog"
               aria-modal="true"
               aria-label="Contact me"
+              data-no-custom-cursor="true"
               className="pointer-events-auto relative w-full max-w-md overflow-hidden rounded-2xl border border-border/60 bg-background shadow-2xl"
             >
               {/* 顶部渐变装饰条 */}

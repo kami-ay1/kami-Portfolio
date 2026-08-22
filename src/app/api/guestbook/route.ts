@@ -21,6 +21,8 @@ type Message = {
   sessionId: string;
   name: string;
   color: string;
+  /** 头像文件名（可空，旧数据没有） */
+  avatar?: string;
   content: string;
   createdAt: number;
   type?: "system";
@@ -51,7 +53,8 @@ const json = (data: unknown) =>
 const redisSnapshot = async (
   sessionId: string,
   name: string,
-  color: string
+  color: string,
+  avatar: string
 ) => {
   const now = Date.now();
 
@@ -62,7 +65,7 @@ const redisSnapshot = async (
     .zscore(PRESENCE_KEY, sessionId)
     .zadd(PRESENCE_KEY, { score: now, member: sessionId })
     .hset(USERS_KEY, {
-      [sessionId]: JSON.stringify({ name, color }),
+      [sessionId]: JSON.stringify({ name, color, avatar }),
     })
     .zremrangebyscore(PRESENCE_KEY, "-inf", now - ONLINE_WINDOW)
     .llen(MSG_KEY)
@@ -127,6 +130,7 @@ const redisSnapshot = async (
       sessionId: id,
       name: info.name || "Guest",
       color: info.color || "#5865f2",
+      avatar: info.avatar || undefined,
     };
   });
 
@@ -154,8 +158,8 @@ const redisAppend = async (msg: Message) => {
 
 const messages: Message[] = [];
 const presence = new Map<string, number>();
-/** sessionId → {name, color}（内存模式的在线用户展示信息） */
-const usersInfo = new Map<string, { name: string; color: string }>();
+/** sessionId → {name, color, avatar}（内存模式的在线用户展示信息） */
+const usersInfo = new Map<string, { name: string; color: string; avatar?: string }>();
 
 const prunePresence = () => {
   const now = Date.now();
@@ -167,15 +171,16 @@ const prunePresence = () => {
 const memorySnapshot = (
   sessionId: string,
   name: string,
-  color: string
+  color: string,
+  avatar: string
 ): {
   messages: Message[];
   onlineCount: number;
-  users: { sessionId: string; name: string; color: string }[];
+  users: { sessionId: string; name: string; color: string; avatar?: string }[];
 } => {
   const known = presence.has(sessionId);
   presence.set(sessionId, Date.now());
-  usersInfo.set(sessionId, { name, color });
+  usersInfo.set(sessionId, { name, color, avatar: avatar || undefined });
   prunePresence();
   if (!known && messages.length > 0) {
     messages.push({
@@ -213,15 +218,16 @@ export async function GET(req: NextRequest) {
 
   const name = req.nextUrl.searchParams.get("name") || "Guest";
   const color = req.nextUrl.searchParams.get("color") || "#5865f2";
+  const avatar = (req.nextUrl.searchParams.get("avatar") || "").slice(0, 64);
 
   if (redis) {
     try {
-      return json(await redisSnapshot(sessionId, name, color));
+      return json(await redisSnapshot(sessionId, name, color, avatar));
     } catch (e) {
       console.error("[guestbook] redis GET failed, falling back:", e);
     }
   }
-  return json(memorySnapshot(sessionId, name, color));
+  return json(memorySnapshot(sessionId, name, color, avatar));
 }
 
 /** POST：发留言 { sessionId, name, color, content } */
@@ -247,6 +253,8 @@ export async function POST(req: NextRequest) {
     sessionId,
     name: cleanName,
     color: typeof color === "string" ? color : "#5865f2",
+    avatar:
+      typeof body.avatar === "string" && body.avatar ? body.avatar.slice(0, 64) : undefined,
     content: cleanContent,
     createdAt: Date.now(),
   };

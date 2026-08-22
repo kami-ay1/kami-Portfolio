@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { Hash, SendHorizontal, Settings2, UserRound, Users2, X } from "lucide-react";
 import { useGuestbook } from "@/hooks/use-guestbook";
+import { ChatAvatar } from "./avatar";
+import { EditProfileModal } from "./edit-profile-modal";
 
 /** SSR 下退化为 useEffect，避免 useLayoutEffect 的服务端警告 */
 const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -15,7 +17,9 @@ const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayout
  *   - ≥2 人在线且面板关闭时，浮现 "N people here" 标签
  *   - Ctrl+/ 快捷开关；Esc / 点击面板外关闭
  *   - 面板：#general 频道头（连接状态点 + 在线人数）、消息列表（头像/昵称/
- *     系统加入提示）、输入框、昵称与颜色编辑（存 localStorage）
+ *     系统加入提示）、输入框；点头像或在线名单里的自己 → 资料编辑弹窗
+ *     （自定义昵称/头像/主题色，存 localStorage；头像为本地文件，
+ *     见 scripts/generate-avatars.mjs 与 src/data/avatars.ts）
  *
  * 与原项目的差异：实时层由独立 Socket.io 服务换成了 API 路由 + 轮询
  * （见 src/app/api/guestbook/route.ts），功能语义一致、无需额外后端。
@@ -24,16 +28,10 @@ const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayout
 const time = (ts: number) =>
   new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-const COLOR_CHOICES = [
-  "#5865f2", "#57f287", "#fee75c", "#eb459e",
-  "#ed4245", "#00b0f4", "#9b59b6", "#e67e22",
-];
-
 export function Guestbook() {
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState("");
-  const [editingProfile, setEditingProfile] = useState(false);
-  const [nameDraft, setNameDraft] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
   const [showUserList, setShowUserList] = useState(false);
   /** Portal 需要 document，SSR/首帧时不可用 */
   const [mounted, setMounted] = useState(false);
@@ -79,15 +77,15 @@ export function Guestbook() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
-  // Esc 关闭
+  // Esc 关闭（资料弹窗开着时优先只关弹窗，弹窗内部自己处理 Esc）
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !editingProfile) setIsOpen(false);
+      if (e.key === "Escape" && !editOpen) setIsOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isOpen, editingProfile]);
+  }, [isOpen, editOpen]);
 
   // 新消息时保持贴底（原本就在底部才跟随）。
   // 必须用 layout effect：在浏览器绘制之前执行滚动定位，
@@ -154,36 +152,27 @@ export function Guestbook() {
     if (!ok) setDraft(text);
   };
 
-  const saveProfile = () => {
-    const name = nameDraft.trim().slice(0, 24) || "Guest";
-    updateProfile({ name });
-    setEditingProfile(false);
-  };
-
   return (
     <>
-      {/* 按钮区："N people here" 标签 + 图标按钮（原项目同款） */}
+      {/* 按钮区："N people here" 标签（不吃填色）+ 图标按钮（悬浮拉宽露出 let's chat） */}
       <div className="pointer-events-auto flex items-center gap-2">
-        <AnimatePresence>
-          {onlineCount >= 2 && !isOpen && (
-            <motion.span
-              initial={{ opacity: 0, x: 5 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 5 }}
-              className="hidden select-none whitespace-nowrap text-xs font-medium text-muted-foreground md:block"
-            >
-              {onlineCount} people here
-            </motion.span>
-          )}
-        </AnimatePresence>
+        {!isOpen && (
+          <span className="hidden select-none whitespace-nowrap text-xs font-medium text-muted-foreground md:block">
+            {onlineCount} {onlineCount === 1 ? "person" : "people"} here
+          </span>
+        )}
 
         <button
           aria-label={isOpen ? "Close chat" : "Open chat"}
           title="Chat (Ctrl+/)"
           onClick={() => setIsOpen((v) => !v)}
-          className="relative grid size-10 place-items-center rounded-lg border-2 border-border/30 backdrop-blur-sm transition-all duration-300"
+          className="btn-fill group relative flex h-10 items-center rounded-lg px-2.5 transition-colors"
         >
-          <Users2 className="relative size-5" />
+          <Users2 className="size-5 shrink-0" />
+          {/* 悬浮拉宽：max-w 0→96 露出文字，文字自身 overflow-hidden 裁剪 */}
+          <span className="max-w-0 overflow-hidden whitespace-nowrap text-xs font-semibold leading-none opacity-0 transition-all duration-500 ease-[cubic-bezier(0.65,0.05,0.35,1)] group-hover:ml-2 group-hover:max-w-24 group-hover:opacity-100">
+            let&apos;s chat
+          </span>
           <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full bg-red-500 text-[10px] font-bold text-white transition-colors">
             {onlineCount}
           </span>
@@ -210,13 +199,14 @@ export function Guestbook() {
                 同样 Portal 出去，摆脱顶栏包含块，fixed 定位锚回视口 */}
             <AnimatePresence>
               {isOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                  transition={{ duration: 0.2 }}
-                  className="pointer-events-auto fixed right-4 top-16 z-40 flex h-[440px] w-80 flex-col overflow-hidden rounded-xl border border-border bg-background text-foreground shadow-2xl dark:border-white/10 dark:bg-[#0b0b0e] dark:text-zinc-100 sm:w-96"
-                >
+        <motion.div
+          initial={{ opacity: 0, y: 8, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 8, scale: 0.98 }}
+          transition={{ duration: 0.2 }}
+          data-no-custom-cursor="true"
+          className="pointer-events-auto fixed right-4 top-16 z-40 flex h-[440px] w-80 flex-col overflow-hidden rounded-xl border border-border bg-background text-foreground shadow-2xl dark:border-white/10 dark:bg-[#0b0b0e] dark:text-zinc-100 sm:w-96"
+        >
             {/* 频道头 */}
             <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4 dark:border-white/10">
               <div className="flex items-center gap-2 font-semibold">
@@ -238,20 +228,17 @@ export function Guestbook() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => {
-                    setNameDraft(profile.name);
-                    setEditingProfile((v) => !v);
-                  }}
+                  onClick={() => setEditOpen(true)}
                   title="Edit profile"
-                  className="grid size-8 place-items-center rounded-full transition-colors hover:bg-secondary dark:hover:bg-white/10"
+                  className="relative grid size-8 place-items-center rounded-full transition-colors hover:bg-secondary dark:hover:bg-white/10"
                 >
-                  <span
-                    className="grid size-7 place-items-center rounded-full text-xs font-bold text-white ring-1 ring-border dark:ring-white/20"
-                    style={{ backgroundColor: profile.color }}
-                  >
-                    {profile.name[0]?.toUpperCase()}
-                    <Settings2 className="absolute size-3 translate-x-3 translate-y-3 text-white/80" />
-                  </span>
+                  <ChatAvatar
+                    name={profile.name}
+                    color={profile.color}
+                    avatar={profile.avatar}
+                    className="size-7"
+                  />
+                  <Settings2 className="absolute size-3 translate-x-3 translate-y-3 text-white/80" />
                 </button>
                 <button
                   onClick={() => setShowUserList((v) => !v)}
@@ -268,51 +255,6 @@ export function Guestbook() {
                 </button>
               </div>
             </div>
-
-            {/* 资料编辑（昵称 + 颜色，存 localStorage） */}
-            <AnimatePresence>
-              {editingProfile && (
-                <motion.div
-                  initial={{ height: 0 }}
-                  animate={{ height: "auto" }}
-                  exit={{ height: 0 }}
-                  className="overflow-hidden border-b border-border bg-secondary/40 dark:border-white/10 dark:bg-white/5"
-                >
-                  <div className="space-y-2 p-3">
-                    <input
-                      value={nameDraft}
-                      onChange={(e) => setNameDraft(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && saveProfile()}
-                      maxLength={24}
-                      placeholder="Your name"
-                      className="w-full rounded-md bg-secondary/40 px-2 py-1.5 text-sm outline-none ring-1 ring-border focus:ring-foreground/30 dark:bg-black/40 dark:ring-white/10 dark:focus:ring-white/30"
-                    />
-                    <div className="flex items-center justify-between">
-                      <div className="flex gap-1.5">
-                        {COLOR_CHOICES.map((c) => (
-                          <button
-                            key={c}
-                            onClick={() => updateProfile({ color: c })}
-                            className={`size-5 rounded-full transition-transform hover:scale-110 ${
-                              profile.color === c
-                                ? "ring-2 ring-foreground ring-offset-2 ring-offset-background dark:ring-white dark:ring-offset-[#0b0b0e]"
-                                : ""
-                            }`}
-                            style={{ backgroundColor: c }}
-                          />
-                        ))}
-                      </div>
-                      <button
-                        onClick={saveProfile}
-                        className="rounded-md bg-[#5865f2] px-3 py-1 text-xs font-semibold text-white hover:bg-[#4752c4]"
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
             {/* 在线名单浮层：点头部的计数按钮开关（原项目 UserList 同款位置） */}
             <AnimatePresence>
@@ -343,20 +285,21 @@ export function Guestbook() {
                         <li key={u.sessionId}>
                           <button
                             onClick={() => {
-                              // 点自己 → 打开资料编辑
+                              // 点自己 → 打开资料编辑弹窗
                               if (isMe) {
-                                setNameDraft(profile.name);
-                                setEditingProfile(true);
+                                setEditOpen(true);
                                 setShowUserList(false);
                               }
                             }}
                             className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-secondary/60 dark:hover:bg-white/5"
                           >
-                            <span
-                              className="relative grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
-                              style={{ backgroundColor: u.color }}
-                            >
-                              {u.name[0]?.toUpperCase()}
+                            <span className="relative shrink-0">
+                              <ChatAvatar
+                                name={u.name}
+                                color={u.color}
+                                avatar={u.avatar}
+                                className="size-8"
+                              />
                               <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background bg-green-500 dark:border-[#0b0b0e]" />
                             </span>
                             <span className="truncate text-sm font-medium">
@@ -400,12 +343,12 @@ export function Guestbook() {
                     </p>
                   ) : (
                     <div key={m.id} className="flex gap-2.5">
-                      <span
-                        className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
-                        style={{ backgroundColor: m.color }}
-                      >
-                        {m.name[0]?.toUpperCase()}
-                      </span>
+                      <ChatAvatar
+                        name={m.name}
+                        color={m.color}
+                        avatar={m.avatar}
+                        className="mt-0.5 size-8"
+                      />
                       <div className="min-w-0">
                         <p className="flex items-baseline gap-2">
                           <span className="truncate text-sm font-semibold">{m.name}</span>
@@ -461,6 +404,14 @@ export function Guestbook() {
           </>,
           document.body
         )}
+
+      {/* 资料编辑弹窗（自带 Portal，居中覆盖全屏） */}
+      <EditProfileModal
+        isOpen={editOpen}
+        profile={profile}
+        onClose={() => setEditOpen(false)}
+        onSave={updateProfile}
+      />
     </>
   );
 }

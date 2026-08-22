@@ -115,7 +115,7 @@ export function ThemeToggle() {
       ref={btnRef}
       aria-label="Toggle theme"
       onClick={toggle}
-      className="relative grid size-9 place-items-center rounded-full border border-border/60 bg-background/60 text-foreground/80 backdrop-blur transition-colors hover:text-foreground"
+      className="btn-fill relative grid size-9 place-items-center rounded-full text-foreground/80 transition-colors hover:text-foreground"
     >
       <SunIcon />
       <MoonIcon />

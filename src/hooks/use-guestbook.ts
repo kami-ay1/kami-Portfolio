@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isKnownAvatar, randomAvatar } from "@/data/avatars";
 
 /**
  * 留言板客户端数据层：身份（sessionId + 昵称/颜色存 localStorage）、
@@ -15,21 +16,29 @@ export type GuestbookMessage = {
   sessionId: string;
   name: string;
   color: string;
+  /** 头像文件名（avatar-7.svg）；旧数据可能没有 → 首字母回退 */
+  avatar?: string;
   content: string;
   createdAt: number;
   type?: "system";
 };
 
-export type GuestbookProfile = { name: string; color: string };
+export type GuestbookProfile = { name: string; color: string; avatar: string };
 
-export type OnlineUser = { sessionId: string; name: string; color: string };
+export type OnlineUser = {
+  sessionId: string;
+  name: string;
+  color: string;
+  avatar?: string;
+};
 
 const COLORS = [
   "#5865f2", "#57f287", "#fee75c", "#eb459e",
   "#ed4245", "#00b0f4", "#9b59b6", "#e67e22",
 ];
 
-/** 随机昵称词库：形容词 × 动物 × 编号 ≈ 4 万种组合，小流量下几乎不重名 */
+/** 随机昵称词库：形容词 × 动物 × 编号 ≈ 4 万种组合，小流量下几乎不重名
+ *  （头像与昵称无关，随机另配一张，见 data/avatars.ts） */
 const ADJECTIVES = [
   "Swift", "Cosmic", "Lucky", "Brave", "Calm", "Eager", "Fuzzy", "Gentle",
   "Happy", "Jolly", "Merry", "Nimble", "Plucky", "Quiet", "Rapid", "Silly",
@@ -40,6 +49,7 @@ const ANIMALS = [
   "Rabbit", "Fox", "Wolf", "Bear", "Hawk", "Crane", "Koi", "Moose",
   "Seal", "Crow", "Gecko", "Ibex",
 ];
+
 const randomName = () =>
   `${ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)]} ${
     ANIMALS[Math.floor(Math.random() * ANIMALS.length)]
@@ -57,17 +67,24 @@ function loadIdentity() {
     sessionId = uid();
     localStorage.setItem("guestbook:session", sessionId);
   }
-  // 没起过名字的访客自动分配一个随机昵称并立即持久化（跨访问稳定）
+  // 没起过名字的访客自动分配随机昵称并立即持久化（跨访问稳定）；
+  // 头像独立随机分配（与昵称无关），换批次后旧文件名失效会自动重抽一张
   let name = localStorage.getItem("guestbook:name");
   if (!name) {
     name = randomName();
     localStorage.setItem("guestbook:name", name);
+  }
+  let avatar = localStorage.getItem("guestbook:avatar") || "";
+  if (!isKnownAvatar(avatar)) {
+    avatar = randomAvatar();
+    localStorage.setItem("guestbook:avatar", avatar);
   }
   const profile: GuestbookProfile = {
     name,
     color:
       localStorage.getItem("guestbook:color") ||
       COLORS[Math.floor(Math.random() * COLORS.length)],
+    avatar,
   };
   return { sessionId, profile };
 }
@@ -80,6 +97,7 @@ export function useGuestbook(isOpen: boolean) {
   const [profile, setProfile] = useState<GuestbookProfile>({
     name: "Guest",
     color: COLORS[0],
+    avatar: "",
   });
 
   const sessionRef = useRef<string>("");
@@ -102,7 +120,8 @@ export function useGuestbook(isOpen: boolean) {
       const p = profileRef.current;
       const res = await fetch(
         `/api/guestbook?sessionId=${encodeURIComponent(sessionRef.current)}` +
-          `&name=${encodeURIComponent(p.name)}&color=${encodeURIComponent(p.color)}`,
+          `&name=${encodeURIComponent(p.name)}&color=${encodeURIComponent(p.color)}` +
+          `&avatar=${encodeURIComponent(p.avatar)}`,
         { cache: "no-store" }
       );
       if (!res.ok) throw new Error(String(res.status));
@@ -151,6 +170,7 @@ export function useGuestbook(isOpen: boolean) {
         sessionId: sessionRef.current,
         name: p.name,
         color: p.color,
+        avatar: p.avatar,
         content: text,
         createdAt: Date.now(),
       };
@@ -163,6 +183,7 @@ export function useGuestbook(isOpen: boolean) {
             sessionId: optimistic.sessionId,
             name: p.name,
             color: p.color,
+            avatar: p.avatar,
             content: text,
           }),
         });
@@ -191,6 +212,7 @@ export function useGuestbook(isOpen: boolean) {
       profileRef.current = merged;
       localStorage.setItem("guestbook:name", merged.name);
       localStorage.setItem("guestbook:color", merged.color);
+      localStorage.setItem("guestbook:avatar", merged.avatar);
       return merged;
     });
   }, []);
