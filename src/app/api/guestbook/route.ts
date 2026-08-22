@@ -28,6 +28,8 @@ type Message = {
 
 const MSG_KEY = "guestbook:messages";
 const PRESENCE_KEY = "guestbook:presence";
+/** hash：sessionId → JSON{name, color}，在线用户的展示信息 */
+const USERS_KEY = "guestbook:users";
 const ONLINE_WINDOW = 30_000;
 const MAX_MESSAGES = 200;
 
@@ -53,17 +55,20 @@ const redisSnapshot = async (
 ) => {
   const now = Date.now();
 
-  // 第一批：心跳 + 清理 + 判断是否首次（一次往返）
+  // 第一批：心跳 + 记录展示信息 + 清理 + 判断是否首次（一次往返）
   // 注意：本版本 SDK 的 pipeline.exec() 直接返回结果数组（无 .result 包装）
   const batch1 = await redis!
     .pipeline()
     .zscore(PRESENCE_KEY, sessionId)
     .zadd(PRESENCE_KEY, { score: now, member: sessionId })
+    .hset(USERS_KEY, {
+      [sessionId]: JSON.stringify({ name, color }),
+    })
     .zremrangebyscore(PRESENCE_KEY, "-inf", now - ONLINE_WINDOW)
     .llen(MSG_KEY)
     .exec();
   const isFirstHeartbeat = batch1[0] === null;
-  const messageCount = Number(batch1[3] ?? 0);
+  const messageCount = Number(batch1[4] ?? 0);
 
   // 首次心跳插入加入系统消息（对齐原项目的 join 提示）
   if (isFirstHeartbeat && messageCount > 0) {
@@ -79,11 +84,12 @@ const redisSnapshot = async (
     await redis!.rpush(MSG_KEY, JSON.stringify(join));
   }
 
-  // 第二批：取消息 + 在线人数（一次往返）
+  // 第二批：取消息 + 在线名单 + 在线人数（一次往返，zcard 省掉——人数即名单长度）
   const batch2 = await redis!
     .pipeline()
     .lrange(MSG_KEY, -100, -1)
-    .zcard(PRESENCE_KEY)
+    .zrange(PRESENCE_KEY, 0, -1)
+    .hgetall(USERS_KEY)
     .exec();
   const raw = (batch2[0] ?? []) as unknown[];
   // Upstash 客户端会把合法 JSON 自动反序列化成对象；旧数据/边界情况下
@@ -91,8 +97,46 @@ const redisSnapshot = async (
   const messages = raw.map((s) =>
     typeof s === "string" ? (JSON.parse(s) as Message) : (s as Message)
   );
-  const onlineCount = Number(batch2[1] ?? 1);
-  return { messages, onlineCount };
+
+  const liveIds = (batch2[1] ?? []) as string[];
+  const liveSet = new Set(liveIds);
+  // hgetall 可能返回对象或扁平数组（SDK 版本差异），两种都兼容
+  const rawHash = batch2[2] as unknown;
+  const hash: Record<string, string> = Array.isArray(rawHash)
+    ? Object.fromEntries(
+        (rawHash as string[]).reduce<[string, string][]>((acc, v, i, arr) => {
+          if (i % 2 === 1) acc.push([arr[i - 1], v]);
+          return acc;
+        }, [])
+      )
+    : ((rawHash as Record<string, string>) ?? {});
+
+  const users = liveIds.map((id) => {
+    // hash 值可能是对象（自动反序列化）或字符串（含双重序列化的边界），全兼容
+    const info = (() => {
+      try {
+        const raw = hash[id];
+        if (!raw) return {};
+        const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+        return typeof parsed === "string" ? JSON.parse(parsed) : parsed;
+      } catch {
+        return {};
+      }
+    })();
+    return {
+      sessionId: id,
+      name: info.name || "Guest",
+      color: info.color || "#5865f2",
+    };
+  });
+
+  // 惰性清理：hash 里堆积的已离线用户超过阈值时删一轮（不增加常规往返）
+  const stale = Object.keys(hash).filter((id) => !liveSet.has(id));
+  if (stale.length > 50) {
+    redis!.hdel(USERS_KEY, ...stale).catch(() => {});
+  }
+
+  return { messages, onlineCount: users.length, users };
 };
 
 const redisAppend = async (msg: Message) => {
@@ -110,6 +154,8 @@ const redisAppend = async (msg: Message) => {
 
 const messages: Message[] = [];
 const presence = new Map<string, number>();
+/** sessionId → {name, color}（内存模式的在线用户展示信息） */
+const usersInfo = new Map<string, { name: string; color: string }>();
 
 const prunePresence = () => {
   const now = Date.now();
@@ -122,9 +168,14 @@ const memorySnapshot = (
   sessionId: string,
   name: string,
   color: string
-): { messages: Message[]; onlineCount: number } => {
+): {
+  messages: Message[];
+  onlineCount: number;
+  users: { sessionId: string; name: string; color: string }[];
+} => {
   const known = presence.has(sessionId);
   presence.set(sessionId, Date.now());
+  usersInfo.set(sessionId, { name, color });
   prunePresence();
   if (!known && messages.length > 0) {
     messages.push({
@@ -137,7 +188,11 @@ const memorySnapshot = (
       type: "system",
     });
   }
-  return { messages: messages.slice(-100), onlineCount: presence.size };
+  const users = [...presence.keys()].map((id) => ({
+    sessionId: id,
+    ...(usersInfo.get(id) ?? { name: "Guest", color: "#5865f2" }),
+  }));
+  return { messages: messages.slice(-100), onlineCount: users.length, users };
 };
 
 const memoryAppend = (msg: Message) => {

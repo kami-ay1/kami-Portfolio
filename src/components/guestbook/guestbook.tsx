@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { Hash, SendHorizontal, Settings2, Users2 } from "lucide-react";
+import { Hash, SendHorizontal, Settings2, UserRound, Users2, X } from "lucide-react";
 import { useGuestbook } from "@/hooks/use-guestbook";
 
 /** SSR 下退化为 useEffect，避免 useLayoutEffect 的服务端警告 */
@@ -34,11 +34,12 @@ export function Guestbook() {
   const [draft, setDraft] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [showUserList, setShowUserList] = useState(false);
   /** Portal 需要 document，SSR/首帧时不可用 */
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const { messages, onlineCount, connected, profile, send, updateProfile } =
+  const { messages, onlineCount, users, connected, profile, sessionId, send, updateProfile } =
     useGuestbook(isOpen);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -252,10 +253,19 @@ export function Guestbook() {
                     <Settings2 className="absolute size-3 translate-x-3 translate-y-3 text-white/80" />
                   </span>
                 </button>
-                <span className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground dark:text-zinc-300">
+                <button
+                  onClick={() => setShowUserList((v) => !v)}
+                  title="Online users"
+                  className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
+                    showUserList
+                      ? "bg-secondary text-foreground dark:bg-white/10 dark:text-white"
+                      : "text-muted-foreground hover:bg-secondary hover:text-foreground dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-white"
+                  }`}
+                >
                   <span className="size-2 rounded-full bg-green-500" />
                   {onlineCount}
-                </span>
+                  <UserRound className="size-4" />
+                </button>
               </div>
             </div>
 
@@ -300,6 +310,68 @@ export function Guestbook() {
                       </button>
                     </div>
                   </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* 在线名单浮层：点头部的计数按钮开关（原项目 UserList 同款位置） */}
+            <AnimatePresence>
+              {showUserList && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute inset-0 z-20 flex flex-col bg-background/95 backdrop-blur-sm dark:bg-[#0b0b0e]/95"
+                >
+                  <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4 dark:border-white/10">
+                    <span className="text-sm font-semibold">
+                      Online — {users.length}
+                    </span>
+                    <button
+                      onClick={() => setShowUserList(false)}
+                      aria-label="Close user list"
+                      className="grid size-7 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground dark:hover:bg-white/10 dark:hover:text-white"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                  <ul className="chat-scroll flex-1 space-y-1 overflow-y-auto p-2">
+                    {users.map((u) => {
+                      const isMe = u.sessionId === sessionId.current;
+                      return (
+                        <li key={u.sessionId}>
+                          <button
+                            onClick={() => {
+                              // 点自己 → 打开资料编辑
+                              if (isMe) {
+                                setNameDraft(profile.name);
+                                setEditingProfile(true);
+                                setShowUserList(false);
+                              }
+                            }}
+                            className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-secondary/60 dark:hover:bg-white/5"
+                          >
+                            <span
+                              className="relative grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
+                              style={{ backgroundColor: u.color }}
+                            >
+                              {u.name[0]?.toUpperCase()}
+                              <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background bg-green-500 dark:border-[#0b0b0e]" />
+                            </span>
+                            <span className="truncate text-sm font-medium">
+                              {u.name}
+                            </span>
+                            {isMe && (
+                              <span className="ml-auto rounded-full bg-secondary px-2 py-0.5 text-[10px] font-semibold text-muted-foreground dark:bg-white/10 dark:text-zinc-300">
+                                You
+                              </span>
+                            )}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </motion.div>
               )}
             </AnimatePresence>

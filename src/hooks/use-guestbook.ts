@@ -22,6 +22,8 @@ export type GuestbookMessage = {
 
 export type GuestbookProfile = { name: string; color: string };
 
+export type OnlineUser = { sessionId: string; name: string; color: string };
+
 const COLORS = [
   "#5865f2", "#57f287", "#fee75c", "#eb459e",
   "#ed4245", "#00b0f4", "#9b59b6", "#e67e22",
@@ -73,6 +75,7 @@ function loadIdentity() {
 export function useGuestbook(isOpen: boolean) {
   const [messages, setMessages] = useState<GuestbookMessage[]>([]);
   const [onlineCount, setOnlineCount] = useState(1);
+  const [users, setUsers] = useState<OnlineUser[]>([]);
   const [connected, setConnected] = useState(false);
   const [profile, setProfile] = useState<GuestbookProfile>({
     name: "Guest",
@@ -106,9 +109,11 @@ export function useGuestbook(isOpen: boolean) {
       const data = (await res.json()) as {
         messages: GuestbookMessage[];
         onlineCount: number;
+        users?: OnlineUser[];
       };
       setMessages(data.messages);
       setOnlineCount(data.onlineCount);
+      if (data.users) setUsers(data.users);
       setConnected(true);
     } catch {
       setConnected(false);
@@ -193,6 +198,7 @@ export function useGuestbook(isOpen: boolean) {
   return {
     messages,
     onlineCount,
+    users,
     connected,
     profile,
     sessionId: sessionRef,
