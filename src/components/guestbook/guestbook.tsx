@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { Hash, SendHorizontal, Settings2, Users2 } from "lucide-react";
 import { useGuestbook } from "@/hooks/use-guestbook";
+
+/** SSR 下退化为 useEffect，避免 useLayoutEffect 的服务端警告 */
+const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 /**
  * 顶栏留言板（对照原项目 OnlineUsers 按钮复刻）：
@@ -30,12 +34,37 @@ export function Guestbook() {
   const [draft, setDraft] = useState("");
   const [editingProfile, setEditingProfile] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  /** Portal 需要 document，SSR/首帧时不可用 */
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  const { messages, onlineCount, unreads, connected, profile, send, updateProfile } =
+  const { messages, onlineCount, connected, profile, send, updateProfile } =
     useGuestbook(isOpen);
 
   const listRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
+  const wasOpenRef = useRef(false);
+  const dragRef = useRef<{ startY: number; startScrollTop: number } | null>(null);
+  const [scrollThumb, setScrollThumb] = useState({ top: 0, height: 0, visible: false });
+
+  const updateScrollThumb = useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    if (maxScroll <= 0) {
+      setScrollThumb({ top: 0, height: 0, visible: false });
+      return;
+    }
+
+    const height = Math.max(32, (el.clientHeight * el.clientHeight) / el.scrollHeight);
+    const maxTop = el.clientHeight - height;
+    setScrollThumb({
+      top: (el.scrollTop / maxScroll) * maxTop,
+      height,
+      visible: true,
+    });
+  }, []);
 
   // Ctrl+/ 开关（原项目同款快捷键）
   useEffect(() => {
@@ -59,22 +88,69 @@ export function Guestbook() {
     return () => window.removeEventListener("keydown", onKey);
   }, [isOpen, editingProfile]);
 
-  // 新消息时保持贴底（原本就在底部才跟随）
+  // 新消息时保持贴底（原本就在底部才跟随）。
+  // 必须用 layout effect：在浏览器绘制之前执行滚动定位，
+  // 否则会先画出"顶部"一帧再跳到底部，用户看到滚动过程
+  useIsoLayoutEffect(() => {
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
+    }
+
+    const el = listRef.current;
+    const openedNow = !wasOpenRef.current;
+    wasOpenRef.current = true;
+    if (el && (openedNow || atBottomRef.current)) el.scrollTop = el.scrollHeight;
+    updateScrollThumb();
+  }, [isOpen, messages, updateScrollThumb]);
+
   useEffect(() => {
     const el = listRef.current;
-    if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+    if (!el) return;
+    const resizeObserver = new ResizeObserver(updateScrollThumb);
+    resizeObserver.observe(el);
+    updateScrollThumb();
+    return () => resizeObserver.disconnect();
+  }, [isOpen, updateScrollThumb]);
 
   const onListScroll = () => {
     const el = listRef.current;
     if (!el) return;
     atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    updateScrollThumb();
+  };
+
+  const startThumbDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = listRef.current;
+    if (!el) return;
+    e.preventDefault();
+    dragRef.current = { startY: e.clientY, startScrollTop: el.scrollTop };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const dragThumb = (e: React.PointerEvent<HTMLDivElement>) => {
+    const el = listRef.current;
+    const drag = dragRef.current;
+    if (!el || !drag || scrollThumb.height === 0) return;
+
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    const maxThumbTop = el.clientHeight - scrollThumb.height;
+    el.scrollTop = drag.startScrollTop + ((e.clientY - drag.startY) / maxThumbTop) * maxScroll;
+  };
+
+  const stopThumbDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragRef.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
   };
 
   const submit = async () => {
-    if (!draft.trim()) return;
-    const ok = await send(draft);
-    if (ok) setDraft("");
+    const text = draft;
+    if (!text.trim()) return;
+    setDraft(""); // 立即清空（乐观），失败在下面回填
+    const ok = await send(text);
+    if (!ok) setDraft(text);
   };
 
   const saveProfile = () => {
@@ -104,63 +180,46 @@ export function Guestbook() {
           aria-label={isOpen ? "Close chat" : "Open chat"}
           title="Chat (Ctrl+/)"
           onClick={() => setIsOpen((v) => !v)}
-          className={`relative grid size-10 place-items-center rounded-lg border-2 backdrop-blur-sm transition-all duration-300 ${
-            unreads > 0 && !isOpen
-              ? "animate-pulse border-green-500/50"
-              : "border-border/30"
-          }`}
+          className="relative grid size-10 place-items-center rounded-lg border-2 border-border/30 backdrop-blur-sm transition-all duration-300"
         >
-          <span className="relative">
-            {/* 未读时的扩散波纹（原项目同款） */}
-            <motion.span
-              initial={{ scale: 0.1, opacity: 1 }}
-              animate={{ scale: 2, opacity: 0 }}
-              transition={{
-                duration: 0.4,
-                ease: "easeOut",
-                repeat: Infinity,
-                repeatDelay: 2,
-              }}
-              className={`absolute -inset-1 rounded-full ${
-                unreads > 0 ? "bg-green-500/40" : "bg-transparent"
-              }`}
-            />
-            <Users2 className="relative size-5" />
-          </span>
-          <span
-            className={`absolute -right-1 -top-1 grid size-5 place-items-center rounded-full text-[10px] font-bold text-white transition-colors ${
-              unreads > 0 ? "bg-green-500" : "bg-red-500"
-            }`}
-          >
-            {unreads > 0 ? unreads : onlineCount}
+          <Users2 className="relative size-5" />
+          <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full bg-red-500 text-[10px] font-bold text-white transition-colors">
+            {onlineCount}
           </span>
         </button>
       </div>
 
-      {/* 面板外透明捕获层：点击关闭（等价于原项目 Popover 的外部点击关闭） */}
-      <AnimatePresence>
-        {isOpen && (
-          <div
-            className="fixed inset-0 z-[2]"
-            onClick={() => setIsOpen(false)}
-          />
-        )}
-      </AnimatePresence>
+      {mounted &&
+        createPortal(
+          <>
+            {/* 面板外透明捕获层：点击关闭。
+                必须 Portal 到 body：顶栏有 backdrop-blur（backdrop-filter），
+                它会成为内部 fixed 元素的包含块，导致这个 inset-0 层
+                实际只盖住 64px 的顶栏条而不是全屏 */}
+            <AnimatePresence>
+              {isOpen && (
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => setIsOpen(false)}
+                />
+              )}
+            </AnimatePresence>
 
-      {/* 聊天面板（顶栏右下方，深色 Discord 风——原项目同款） */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.98 }}
-            transition={{ duration: 0.2 }}
-            className="pointer-events-auto fixed right-4 top-16 z-[3] flex h-[440px] w-80 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0e] text-zinc-100 shadow-2xl sm:w-96"
-          >
+            {/* 聊天面板（顶栏右下方，深色 Discord 风——原项目同款）。
+                同样 Portal 出去，摆脱顶栏包含块，fixed 定位锚回视口 */}
+            <AnimatePresence>
+              {isOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                  transition={{ duration: 0.2 }}
+                  className="pointer-events-auto fixed right-4 top-16 z-40 flex h-[440px] w-80 flex-col overflow-hidden rounded-xl border border-border bg-background text-foreground shadow-2xl dark:border-white/10 dark:bg-[#0b0b0e] dark:text-zinc-100 sm:w-96"
+                >
             {/* 频道头 */}
-            <div className="flex h-12 shrink-0 items-center justify-between border-b border-white/10 px-4">
+            <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4 dark:border-white/10">
               <div className="flex items-center gap-2 font-semibold">
-                <Hash className="size-4 text-zinc-400" />
+                <Hash className="size-4 text-muted-foreground" />
                 <span>general</span>
                 {/* 连接状态点 */}
                 <span className="ml-1 flex items-center gap-1.5">
@@ -170,7 +229,7 @@ export function Guestbook() {
                     }`}
                   />
                   {!connected && (
-                    <span className="text-[10px] font-normal text-zinc-400">
+                    <span className="text-[10px] font-normal text-muted-foreground">
                       connecting…
                     </span>
                   )}
@@ -183,17 +242,17 @@ export function Guestbook() {
                     setEditingProfile((v) => !v);
                   }}
                   title="Edit profile"
-                  className="grid size-8 place-items-center rounded-full transition-colors hover:bg-white/10"
+                  className="grid size-8 place-items-center rounded-full transition-colors hover:bg-secondary dark:hover:bg-white/10"
                 >
                   <span
-                    className="grid size-7 place-items-center rounded-full text-xs font-bold text-white ring-1 ring-white/20"
+                    className="grid size-7 place-items-center rounded-full text-xs font-bold text-white ring-1 ring-border dark:ring-white/20"
                     style={{ backgroundColor: profile.color }}
                   >
                     {profile.name[0]?.toUpperCase()}
                     <Settings2 className="absolute size-3 translate-x-3 translate-y-3 text-white/80" />
                   </span>
                 </button>
-                <span className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-zinc-300">
+                <span className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground dark:text-zinc-300">
                   <span className="size-2 rounded-full bg-green-500" />
                   {onlineCount}
                 </span>
@@ -207,7 +266,7 @@ export function Guestbook() {
                   initial={{ height: 0 }}
                   animate={{ height: "auto" }}
                   exit={{ height: 0 }}
-                  className="overflow-hidden border-b border-white/10 bg-white/5"
+                  className="overflow-hidden border-b border-border bg-secondary/40 dark:border-white/10 dark:bg-white/5"
                 >
                   <div className="space-y-2 p-3">
                     <input
@@ -216,7 +275,7 @@ export function Guestbook() {
                       onKeyDown={(e) => e.key === "Enter" && saveProfile()}
                       maxLength={24}
                       placeholder="Your name"
-                      className="w-full rounded-md bg-black/40 px-2 py-1.5 text-sm outline-none ring-1 ring-white/10 focus:ring-white/30"
+                      className="w-full rounded-md bg-secondary/40 px-2 py-1.5 text-sm outline-none ring-1 ring-border focus:ring-foreground/30 dark:bg-black/40 dark:ring-white/10 dark:focus:ring-white/30"
                     />
                     <div className="flex items-center justify-between">
                       <div className="flex gap-1.5">
@@ -226,7 +285,7 @@ export function Guestbook() {
                             onClick={() => updateProfile({ color: c })}
                             className={`size-5 rounded-full transition-transform hover:scale-110 ${
                               profile.color === c
-                                ? "ring-2 ring-white ring-offset-2 ring-offset-[#0b0b0e]"
+                                ? "ring-2 ring-foreground ring-offset-2 ring-offset-background dark:ring-white dark:ring-offset-[#0b0b0e]"
                                 : ""
                             }`}
                             style={{ backgroundColor: c }}
@@ -246,78 +305,90 @@ export function Guestbook() {
             </AnimatePresence>
 
             {/* 消息列表 */}
-            <div
-              ref={listRef}
-              onScroll={onListScroll}
-              className="flex-1 space-y-3 overflow-y-auto px-4 py-3"
-            >
-              {messages.length === 0 && (
-                <div className="grid h-full place-items-center text-center text-sm text-zinc-500">
-                  <div>
-                    <p className="text-2xl">👋</p>
-                    <p className="mt-2">Welcome to #general</p>
-                    <p className="text-xs">Be the first to say hi!</p>
-                  </div>
-                </div>
-              )}
-              {messages.map((m) =>
-                m.type === "system" ? (
-                  <p
-                    key={m.id}
-                    className="text-center text-xs text-zinc-500"
-                  >
-                    — {m.name} joined —
-                  </p>
-                ) : (
-                  <div key={m.id} className="flex gap-2.5">
-                    <span
-                      className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
-                      style={{ backgroundColor: m.color }}
-                    >
-                      {m.name[0]?.toUpperCase()}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="flex items-baseline gap-2">
-                        <span className="truncate text-sm font-semibold">
-                          {m.name}
-                        </span>
-                        <span className="shrink-0 text-[10px] text-zinc-500">
-                          {time(m.createdAt)}
-                        </span>
-                      </p>
-                      <p className="break-words text-sm leading-snug text-zinc-300">
-                        {m.content}
-                      </p>
+            <div className="relative min-h-0 flex-1">
+              <div
+                ref={listRef}
+                onScroll={onListScroll}
+                data-lenis-prevent
+                className="chat-scroll h-full space-y-3 overflow-y-auto px-4 py-3"
+              >
+                {messages.length === 0 && (
+                  <div className="grid h-full place-items-center text-center text-sm text-muted-foreground">
+                    <div>
+                      <p className="text-2xl">👋</p>
+                      <p className="mt-2">Welcome to #general</p>
+                      <p className="text-xs">Be the first to say hi!</p>
                     </div>
                   </div>
-                )
+                )}
+                {messages.map((m) =>
+                  m.type === "system" ? (
+                    <p key={m.id} className="text-center text-xs text-muted-foreground">
+                      — {m.name} joined —
+                    </p>
+                  ) : (
+                    <div key={m.id} className="flex gap-2.5">
+                      <span
+                        className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
+                        style={{ backgroundColor: m.color }}
+                      >
+                        {m.name[0]?.toUpperCase()}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="flex items-baseline gap-2">
+                          <span className="truncate text-sm font-semibold">{m.name}</span>
+                          <span className="shrink-0 text-[10px] text-muted-foreground/70 dark:text-zinc-500">
+                            {time(m.createdAt)}
+                          </span>
+                        </p>
+                        <p className="break-words text-sm leading-snug text-muted-foreground dark:text-zinc-300">
+                          {m.content}
+                        </p>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+              {scrollThumb.visible && (
+                <div
+                  aria-hidden="true"
+                  onPointerDown={startThumbDrag}
+                  onPointerMove={dragThumb}
+                  onPointerUp={stopThumbDrag}
+                  onPointerCancel={stopThumbDrag}
+                  className="chat-scroll-thumb absolute right-1 top-0 z-10 w-1.5"
+                  style={{ height: scrollThumb.height, transform: `translateY(${scrollThumb.top}px)` }}
+                />
               )}
             </div>
 
             {/* 输入框 */}
             <div className="shrink-0 p-3">
-              <div className="flex items-center gap-2 rounded-lg bg-black/40 ring-1 ring-white/10 focus-within:ring-white/30">
+              <div className="flex items-center gap-2 rounded-lg bg-secondary/40 ring-1 ring-border focus-within:ring-foreground/30 dark:bg-black/40 dark:ring-white/10 dark:focus-within:ring-white/30">
                 <input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && submit()}
                   maxLength={500}
                   placeholder="Message #general"
-                  className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-zinc-500"
+                  className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60"
                 />
                 <button
                   onClick={submit}
                   disabled={!draft.trim()}
                   aria-label="Send message"
-                  className="mr-1.5 grid size-8 shrink-0 place-items-center rounded-md text-zinc-400 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
+                  className="mr-1.5 grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-40 dark:hover:bg-white/10 dark:hover:text-white"
                 >
                   <SendHorizontal className="size-4" />
                 </button>
               </div>
             </div>
-          </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>,
+          document.body
         )}
-      </AnimatePresence>
     </>
   );
 }

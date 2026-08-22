@@ -43,29 +43,30 @@ const json = (data: unknown) =>
   NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
 
 // ---------- Redis 模式 ----------
-
-const redisTouch = async (sessionId: string) => {
-  const now = Date.now();
-  const existed = await redis!.zscore(PRESENCE_KEY, sessionId);
-  await redis!.zadd(PRESENCE_KEY, { score: now, member: sessionId });
-  await redis!.zremrangebyscore(
-    PRESENCE_KEY,
-    "-inf",
-    now - ONLINE_WINDOW
-  );
-  return { isFirstHeartbeat: existed === null };
-};
+// 所有命令尽量用 pipeline 打包：一次 HTTPS 往返执行多条命令，
+// 从国内到东京节点这能把一次请求从 ~1s 压到 ~200ms
 
 const redisSnapshot = async (
   sessionId: string,
   name: string,
   color: string
 ) => {
-  const { isFirstHeartbeat } = await redisTouch(sessionId);
+  const now = Date.now();
+
+  // 第一批：心跳 + 清理 + 判断是否首次（一次往返）
+  // 注意：本版本 SDK 的 pipeline.exec() 直接返回结果数组（无 .result 包装）
+  const batch1 = await redis!
+    .pipeline()
+    .zscore(PRESENCE_KEY, sessionId)
+    .zadd(PRESENCE_KEY, { score: now, member: sessionId })
+    .zremrangebyscore(PRESENCE_KEY, "-inf", now - ONLINE_WINDOW)
+    .llen(MSG_KEY)
+    .exec();
+  const isFirstHeartbeat = batch1[0] === null;
+  const messageCount = Number(batch1[3] ?? 0);
 
   // 首次心跳插入加入系统消息（对齐原项目的 join 提示）
-  const count = await redis!.llen(MSG_KEY);
-  if (isFirstHeartbeat && count > 0) {
+  if (isFirstHeartbeat && messageCount > 0) {
     const join: Message = {
       id: crypto.randomUUID(),
       sessionId,
@@ -78,17 +79,31 @@ const redisSnapshot = async (
     await redis!.rpush(MSG_KEY, JSON.stringify(join));
   }
 
-  const [raw, onlineCount] = await Promise.all([
-    redis!.lrange(MSG_KEY, -100, -1),
-    redis!.zcard(PRESENCE_KEY),
-  ]);
-  return { messages: raw.map((s) => JSON.parse(s) as Message), onlineCount };
+  // 第二批：取消息 + 在线人数（一次往返）
+  const batch2 = await redis!
+    .pipeline()
+    .lrange(MSG_KEY, -100, -1)
+    .zcard(PRESENCE_KEY)
+    .exec();
+  const raw = (batch2[0] ?? []) as unknown[];
+  // Upstash 客户端会把合法 JSON 自动反序列化成对象；旧数据/边界情况下
+  // 也可能返回字符串，两种都兼容
+  const messages = raw.map((s) =>
+    typeof s === "string" ? (JSON.parse(s) as Message) : (s as Message)
+  );
+  const onlineCount = Number(batch2[1] ?? 1);
+  return { messages, onlineCount };
 };
 
 const redisAppend = async (msg: Message) => {
-  await redisTouch(msg.sessionId);
-  await redis!.rpush(MSG_KEY, JSON.stringify(msg));
-  await redis!.ltrim(MSG_KEY, -MAX_MESSAGES, -1);
+  const now = Date.now();
+  await redis!
+    .pipeline()
+    .zadd(PRESENCE_KEY, { score: now, member: msg.sessionId })
+    .zremrangebyscore(PRESENCE_KEY, "-inf", now - ONLINE_WINDOW)
+    .rpush(MSG_KEY, JSON.stringify(msg))
+    .ltrim(MSG_KEY, -MAX_MESSAGES, -1)
+    .exec();
 };
 
 // ---------- 内存回落模式（未配置 Redis 时） ----------

@@ -44,6 +44,40 @@
   mix-blend-mode: normal;
 }
 
+/* 留言板消息列表滚动条：只保留拖动滑块，轨道背景去掉。
+   滑块颜色随主题：亮色深、暗色白（白底上白滑块会隐形） */
+.chat-scroll {
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+  /* 覆盖 html 继承的 smooth：新数据到达时定位到底部必须瞬时完成，
+     否则打开面板会看到一段“从顶滚到底”的动画 */
+  scroll-behavior: auto;
+}
+.chat-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0 !important;
+}
+.chat-scroll-thumb {
+  cursor: grab;
+  touch-action: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25);
+  transition: background-color 150ms ease;
+}
+.chat-scroll-thumb:hover,
+.chat-scroll-thumb:active {
+  cursor: grabbing;
+  background: rgba(0, 0, 0, 0.4);
+}
+.dark .chat-scroll-thumb {
+  background: rgba(255, 255, 255, 0.22);
+}
+.dark .chat-scroll-thumb:hover,
+.dark .chat-scroll-thumb:active {
+  background: rgba(255, 255, 255, 0.38);
+}
+
 /**
  * 关键分层技巧（学自原项目）：
  * 内容层容器关闭 pointer-events，只对真实内容元素恢复——
