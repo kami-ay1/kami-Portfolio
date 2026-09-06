@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { RollChar as RollCharShared } from "./roll-char";
 import { config } from "@/data/config";
 
 /**
@@ -22,11 +23,11 @@ import { config } from "@/data/config";
 type NavLink = { title: string; href: string; thumbnail: string };
 
 const LINKS: NavLink[] = [
-  { title: "Home", href: "#hero", thumbnail: "/assets/nav-link-previews/hero.png" },
-  { title: "Skills", href: "#skills", thumbnail: "/assets/nav-link-previews/skills.png" },
-  { title: "Experience", href: "#experience", thumbnail: "/assets/nav-link-previews/experience.png" },
-  { title: "Projects", href: "#projects", thumbnail: "/assets/nav-link-previews/projects.png" },
-  { title: "Contact", href: "#contact", thumbnail: "/assets/nav-link-previews/contact.png" },
+  { title: "Home", href: "#hero", thumbnail: "/assets/nav-link-previews/hero.png?v=2" },
+  { title: "Skills", href: "#skills", thumbnail: "/assets/nav-link-previews/skills.png?v=2" },
+  { title: "Experience", href: "#experience", thumbnail: "/assets/nav-link-previews/experience.png?v=2" },
+  { title: "Projects", href: "#projects", thumbnail: "/assets/nav-link-previews/projects.png?v=2" },
+  { title: "Contact", href: "#contact", thumbnail: "/assets/nav-link-previews/contact.png?v=2" },
 ];
 
 /** 原项目同款擦除曲线（Naresh 版用） */
@@ -98,21 +99,10 @@ function useActiveSection(isOpen: boolean) {
   return active;
 }
 
-/** 逐字滚换：hover 时字符向上滚出、副本滚入（landonorris.com 同款 text-roll） */
+/** 逐字滚换：hover 时字符向上滚出、副本滚入（landonorris.com 同款 text-roll）。
+ *  实现抽到 roll-char.tsx 与 Projects 的入场轮盘共享（行为保持不变） */
 function RollChar({ ch, index }: { ch: string; index: number }) {
-  return (
-    <span className="inline-block h-[1.05em] overflow-hidden align-top">
-      <span
-        className="flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.65,0.05,0.35,1)] group-hover:-translate-y-1/2"
-        style={{ transitionDelay: `${index * 22}ms` }}
-      >
-        <span className="block h-[1.05em] leading-none">{ch}</span>
-        <span className="block h-[1.05em] leading-none" aria-hidden>
-          {ch}
-        </span>
-      </span>
-    </span>
-  );
+  return <RollCharShared ch={ch} index={index} />;
 }
 
 /**
@@ -249,6 +239,23 @@ export function MenuOverlay({
   opacity: 1;
   transform: scale(1);
 }
+/* 当前区块链接：置灰 + 下划线标注（颜色走内联样式块，跟 JS 下发） */
+.menu-link.is-active {
+  position: relative;
+  color: #7c8070;
+}
+.dark .menu-link.is-active {
+  color: #8f937f;
+}
+.menu-link.is-active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  height: 2px;
+  background: currentColor;
+}
 /* 底部社媒链接：悬浮时底部横线从左向右展开 */
 .menu-slink {
   position: relative;
@@ -324,7 +331,9 @@ export function MenuOverlay({
                     <a
                       href={link.href}
                       onClick={onClose}
-                      className={`menu-link menu-link-${li} group block py-1 transition-colors`}
+                      className={`menu-link menu-link-${li} group inline-block py-1 transition-colors ${
+                        dimmed ? "is-active" : ""
+                      }`}
                     >
                       <span className="flex justify-end overflow-hidden">
                         {link.title.split("").map((ch, ci) => (
@@ -345,11 +354,7 @@ export function MenuOverlay({
                               ease: LANDO,
                               delay: 0.25 + ci * 0.035,
                             }}
-                            className={`inline-block ${
-                              dimmed
-                                ? "text-[#7C8070] dark:text-[#8F937F]"
-                                : ""
-                            }`}
+                            className="inline-block"
                           >
                             <RollChar ch={ch} index={ci} />
                           </motion.span>
@@ -363,7 +368,8 @@ export function MenuOverlay({
         </ul>
       </nav>
 
-      {/* 底部一行：社媒小字（右对齐，悬浮横线从左向右展开） */}
+      {/* 底部一行：社媒小字（右对齐，悬浮横线从左向右展开）。
+          blog 暂无跳转目标，先做成占位按钮 */}
       <div className="flex flex-wrap items-end justify-end gap-4 px-6 pb-8 text-sm md:pr-[7vw]">
         <div className="flex gap-6">
           <a
@@ -374,13 +380,21 @@ export function MenuOverlay({
           >
             github
           </a>
+          <span
+            className="menu-slink cursor-default"
+            title="博客（建设中）"
+            aria-disabled
+          >
+            blog
+          </span>
           <a
-            href={config.social.linkedin}
+            href="/assets/resume.pdf"
             target="_blank"
             rel="noreferrer"
             className="menu-slink"
+            title="简历（PDF，新标签页打开）"
           >
-            linkedin
+            resume
           </a>
         </div>
       </div>

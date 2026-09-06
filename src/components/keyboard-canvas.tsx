@@ -9,7 +9,9 @@
  *     - 每个键帽以技能名命名（js / ts / react ...，见 src/data/skills.ts）
  *   本组件负责"逻辑"：
  *     1. 懒加载场景，持有 Spline Application 实例
- *     2. 把物理按键 / 鼠标悬停翻译成"技能选中"（查 SKILLS 字典 + 音效 + 浮层）
+ *     2. 把物理按键 / 鼠标悬停翻译成"技能选中"（查 SKILLS 字典 + 音效 +
+ *        场景 heading/desc 变量 → 3D 文字面板显示详情，原版同款；面板
+ *        有 主题×端 四套变体，只在技能区显示，见下方 visible 管理 Effect）
  *     3. GSAP ScrollTrigger 驱动键盘在各章节间的 transform（滚动叙事）
  *     4. 入场编排、DPR 钳制、后台标签页暂停渲染
  *
@@ -26,6 +28,7 @@ import { usePerfProfile } from "@/hooks/use-perf-profile";
 import { useKeyboardScene } from "@/hooks/use-keyboard-scene";
 import { useKeycapSound } from "@/hooks/use-keycap-sound";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { useTheme } from "@/components/theme-provider";
 import { SKILLS, type Skill, type SkillKey } from "@/data/skills";
 import { config } from "@/data/config";
 import { sleep } from "@/lib/utils";
@@ -37,6 +40,7 @@ gsap.registerPlugin(ScrollTrigger);
 
 const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
   const isMobile = useMediaQuery("(max-width: 767px)");
+  const { resolvedTheme } = useTheme();
   const [splineApp, setSplineApp] = useState<Application>();
   const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
   const [activeSection, setActiveSection] = useState<Section>("hero");
@@ -64,7 +68,7 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
     );
   };
 
-  /** 场景变量是可选契约：场景里定义了 heading/desc 就同步写入，没定义就走 HTML 浮层 */
+  /** 场景变量契约：场景里定义了 heading/desc 就写入，驱动 3D 文字面板 */
   const trySetVariable = (name: string, value: string) => {
     if (!splineApp) return;
     try {
@@ -447,6 +451,43 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [splineApp, sceneReady, activeSection]);
 
+  // 技能详情 3D 文字面板（原版同款）：场景里有 主题×端 四套变体，
+  // 按 resolvedTheme/isMobile 只显示一套，且仅在技能区显示；
+  // 面板文字内容来自 heading/desc 场景变量（键帽悬浮/按下时写入）。
+  useEffect(() => {
+    if (!splineApp || !sceneReady) return;
+    const dDark = findObj("text-desktop-dark");
+    const dLight = findObj("text-desktop");
+    const mDark = findObj("text-mobile-dark");
+    const mLight = findObj("text-mobile");
+    // 提亮文字面板：四套面板的 Text 子对象覆盖成亮色
+    // （Spline 的 color setter：无颜色层会自动补一个，直接生效）
+    {
+      const all = splineApp.getAllObjects();
+      for (const panelName of [
+        "text-desktop-dark",
+        "text-desktop",
+        "text-mobile-dark",
+        "text-mobile",
+      ]) {
+        const idx = all.findIndex((o) => o.name === panelName);
+        if (idx < 0) continue;
+        const kids = all.slice(idx + 1, idx + 4).filter((o) => o.name === "Text");
+        kids.forEach((k, i) => {
+          (k as { color?: string }).color = i === 0 ? "#f8fafc" : "#c7d2e4";
+        });
+      }
+    }
+    if (!dDark || !dLight || !mDark || !mLight) return;
+
+    const dark = resolvedTheme === "dark";
+    const inSkills = activeSection === "skills";
+    dDark.visible = inSkills && dark && !isMobile;
+    dLight.visible = inSkills && !dark && !isMobile;
+    mDark.visible = inSkills && dark && isMobile;
+    mLight.visible = inSkills && !dark && isMobile;
+  }, [splineApp, sceneReady, resolvedTheme, isMobile, activeSection]);
+
   // 钳制渲染倍率：Spline 导出默认按 devicePixelRatio 渲染，2-3 倍屏
   // 会渲染 1x 屏 4-9 倍的像素量。_renderer 是内部 API（变了就静默放弃）。
   useEffect(() => {
@@ -497,39 +538,6 @@ const KeyboardScene = ({ maxDpr }: { maxDpr: number }) => {
           onLoad={(app: Application) => setSplineApp(app)}
         />
       </Suspense>
-
-      {/* 技能浮层：按下/悬停键帽时显示（HTML 实现，支持中文，不依赖场景变量） */}
-      <div
-        className={`pointer-events-none fixed inset-x-0 bottom-16 z-10 flex justify-center transition-all duration-300 ${
-          selectedSkill
-            ? "translate-y-0 opacity-100"
-            : "translate-y-4 opacity-0"
-        }`}
-      >
-        {selectedSkill && (
-          <div
-            className="mx-4 flex max-w-md items-center gap-3 rounded-2xl border border-border/60 bg-background/80 px-5 py-4 shadow-2xl backdrop-blur-md"
-            style={{ boxShadow: `0 10px 40px -12px ${selectedSkill.color}` }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={selectedSkill.icon}
-              alt=""
-              width={40}
-              height={40}
-              className="size-10 shrink-0 object-contain"
-            />
-            <div className="min-w-0">
-              <p className="font-display text-lg font-bold leading-tight">
-                {selectedSkill.label}
-              </p>
-              <p className="truncate text-sm text-muted-foreground">
-                {selectedSkill.shortDescription}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
     </>
   );
 };

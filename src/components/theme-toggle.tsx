@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/components/theme-provider";
 import { flushSync } from "react-dom";
 import { usePerfProfile } from "@/hooks/use-perf-profile";
 

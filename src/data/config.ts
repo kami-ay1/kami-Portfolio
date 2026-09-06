@@ -4,10 +4,11 @@
  */
 export const config = {
   /** 你的名字（hero 大标题按空格拆成两行） */
-  author: "Your Name",
-  role: "Full Stack Developer",
+  author: "KaMie",
+  role: "Full Stack Developer（全栈工程师）",
+  /** 站点域名（部署后替换；暂未定） */
   site: "https://your-domain.com",
-  title: "Your Name — Full Stack Developer",
+  title: "KaMie — Full Stack Developer",
   description:
     "Personal portfolio with an interactive 3D keyboard built with Spline.",
 
@@ -19,9 +20,30 @@ export const config = {
    */
   sceneUrl: "/assets/keyboard.splinecode",
 
+  /**
+   * 背景音乐（顶栏音乐开关用）。放一份免版税音频到 public/assets/，
+   * 想换成真歌就改这里的 url。
+   * 当前曲目：Lo-Fi Waves — Marco Conti (VelarioMusic)，来自 Pixabay
+   * （免版税许可，可商用，无需付费；站点 footer 已附署名）。
+   * 浏览器策略：不会自动播放，访客点顶栏音乐按钮后才开始。
+   */
+  bgm: { url: "/assets/bgm.mp3", volume: 0.35 },
+
+  /**
+   * 联系方式（Contact 区"联系信息行"用：点击复制，邮箱行可 mailto）。
+   * 注意：表单邮件实际投递到 .env.local 的 CONTACT_TO（Resend 测试模式
+   * 只能发到账号邮箱，验证域名后再切换）；这里展示的是对外邮箱。
+   */
+  contact: {
+    wechat: "StayMello",
+    phone: "17816762599",
+    email: "17816762599@163.com",
+  },
+
   social: {
-    github: "https://github.com/yourname",
-    linkedin: "https://www.linkedin.com/in/yourname",
-    email: "mailto:you@example.com",
+    github: "https://github.com/kami-ay1",
+    /** 未提供 LinkedIn，页面已全部移除该入口 */
+    linkedin: "",
+    email: "mailto:17816762599@163.com",
   },
 } as const;

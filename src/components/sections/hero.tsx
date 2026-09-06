@@ -27,7 +27,7 @@ export function HeroSection() {
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <a
               href="#contact"
-              className="rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5"
+              className="rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground"
             >
               Hire Me
             </a>
@@ -35,17 +35,18 @@ export function HeroSection() {
               href={config.social.github}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full border border-border/70 px-6 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary/60"
+              className="rounded-full border border-border/70 px-6 py-2.5 text-sm font-semibold"
             >
               GitHub
             </a>
             <a
-              href={config.social.linkedin}
+              href="/assets/resume.pdf"
               target="_blank"
               rel="noreferrer"
-              className="rounded-full border border-border/70 px-6 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary/60"
+              className="rounded-full border border-border/70 px-6 py-2.5 text-sm font-semibold"
+              title="简历（PDF，新标签页打开）"
             >
-              LinkedIn
+              Resume
             </a>
           </div>
         </div>

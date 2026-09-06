@@ -14,28 +14,43 @@ export type Experience = {
 export const EXPERIENCE: Experience[] = [
   {
     id: 1,
-    startDate: "2024",
+    startDate: "2026",
     endDate: "Present",
-    title: "Full Stack Developer",
-    company: "Your Company",
+    title: "前端开发工程师",
+    company: "杭州天柚信息技术有限公司",
     description: [
-      "Built something impressive end-to-end, with a number to prove it.",
-      "Led a migration / optimization that measurably improved things.",
-      "Owned features from requirements to production.",
+      "负责文旅 CRM（Vue3）营销中心与会员模块的迭代开发：完成拼团、预售、助力、加价购、满折/满减/折扣、推云宝自提等 10+ 营销玩法页面，覆盖会员积分、操作记录、订单分账导出等功能链路。",
+      "封装通用「宽表水平滚动条」组件并统一接入多个宽表页面；修复优化混合路由下的菜单路径匹配、面包屑解析与积分过期查询等通用逻辑。",
+      "参与 230+ 页电商小程序交易域开发：退款详情页、支付卡片多状态展示、预约流程体验优化；将启动页跳转统一迁移至 nav2 导航协议，并同步落地 CRM 后台端配置页。",
+      "参与团队微页面装修渲染引擎、双后端（PHP + Java）请求层与多端埋点体系的维护迭代；协作支撑店务会员小程序（170+ 页）与营销 H5 玩法线（扭蛋机 / 大转盘 / 排行榜）。",
     ],
-    skills: ["nextjs", "ts", "react", "nodejs", "postgres", "docker"],
+    skills: ["vue", "ts", "js", "html", "css", "git"],
   },
   {
     id: 2,
-    startDate: "2022",
-    endDate: "2024",
-    title: "Frontend Developer",
-    company: "Previous Company",
+    startDate: "2025",
+    endDate: "2026",
+    title: "前端开发工程师（实习）",
+    company: "杭州西软信息技术有限公司",
     description: [
-      "Shipped dashboards and internal tools used by the whole team.",
-      "Turned messy spreadsheets into proper products.",
+      "微前端架构下业务模块开发：参与文旅平台旧业务模块拆分与新模块设计开发，在 qiankun 微前端架构下完成会员模块与订单模块多个页面功能开发，实现子应用模块化部署与独立运行。",
+      "配置化表单引擎落地：基于 Avue 表单引擎，通过 JSON 配置化开发生成表单与列表，减少重复开发代码并提升开发效率约 40%。",
+      "模块架构优化与代码重构：对历史高耦合代码进行结构优化，完成会员模块约 10+ 页面开发并提升模块可维护性与扩展能力。",
     ],
-    skills: ["vue", "tailwind", "express", "mongodb"],
+    skills: ["vue", "ts", "js", "git"],
+  },
+  {
+    id: 3,
+    startDate: "2025",
+    endDate: "2026",
+    title: "前端开发工程师（内部组件库）",
+    company: "杭州西软信息技术有限公司",
+    description: [
+      "通用组件体系建设：参与开发并沉淀 20+ 通用组件及工具模块（表单组件、数据展示组件及基础交互组件），基于 Monorepo 与 pnpm workspace 构建，实现组件在多个业务系统中的复用。",
+      "文档平台与开发规范建设：参与搭建组件文档平台，提供组件示例、API 文档及使用指南，降低团队接入成本并提升组件使用效率 30%。",
+      "AI 辅助工程体系建设：参与设计 AI 辅助开发流程，通过规则化 Prompt 与自动化代码重构流程，提高组件库搭建效率 50%。",
+    ],
+    skills: ["vue", "ts", "js", "git"],
   },
 ];
 
@@ -43,32 +58,67 @@ export const EXPERIENCE: Experience[] = [
 export type Project = {
   id: number;
   title: string;
+  /** 卡片上的一句话简介 */
   description: string;
+  /** STAR 详情（Situation / Task / Action / Result），Projects 新版展示用 */
+  highlights?: string[];
   tech: SkillKey[];
   href?: string;
+  /** 图区截图路径（public/assets/projects/ 下），未提供前用占位渐变 */
+  image?: string;
 };
 
 export const PROJECTS: Project[] = [
   {
     id: 1,
-    title: "Project One",
+    title: "CRM 管理后台",
     description:
-      "One line about what it does and why it matters. Replace with your own project.",
-    tech: ["nextjs", "ts", "postgres"],
-    href: "https://github.com/yourname/project-one",
+      "文旅平台 CRM 的 Vue3 重构版：会员 / 订单 / 营销 / 商品 / 数据分析 / 支付全模块。",
+    highlights: [
+      "背景：文旅平台 CRM 旧系统模块高耦合、迭代困难，需在 qiankun 微前端架构下升级重构。",
+      "任务：负责营销中心与会员模块的玩法页面开发及通用能力建设。",
+      "行动：Vue3 + TypeScript 开发拼团 / 预售 / 助力 / 加价购 / 满折满减折扣 / 推云宝自提等 10+ 营销玩法页面与会员积分模块；支持独立运行与微前端嵌入双模式（环境变量切换）；沉淀 AuthButton 按钮级权限、自定义指令集（节流 / 加载更多 / 图片放大）等基础设施。",
+      "结果：封装宽表水平滚动条组件统一多个页面交互；订单分账导出、积分过期查询等链路修复优化；配置页与小程序端通过 nav2 协议统一启动跳转。",
+    ],
+    tech: ["vue", "ts", "js"],
   },
   {
     id: 2,
-    title: "Project Two",
-    description: "Another highlight. Numbers and outcomes beat adjectives.",
-    tech: ["react", "nodejs", "mongodb"],
-    href: "https://github.com/yourname/project-two",
+    title: "嵌入式营销活动 H5",
+    description:
+      "嵌在小程序 webview 里的营销玩法集合：扭蛋机、大转盘、排行榜、小程序装修。",
+    highlights: [
+      "背景：小程序包体积与审核流程不适合频繁上新的互动营销活动，需要可复用的 H5 玩法层与配套装修能力。",
+      "任务：开发可嵌入小程序 webview 的营销活动 H5 与配套后台装修能力。",
+      "行动：Vue2 + TypeScript 实现扭蛋机（Gashapon）、大转盘、排行榜闯关等游戏化玩法与营销中心；开发小程序装修后台（MpDecoration）：组件注册注入 + 拖拽搭建 + 属性配置面板，装修数据驱动小程序端动态渲染；覆盖抖音渠道页。",
+      "结果：活动模板化配置、玩法多场景复用，运营侧自助搭建页面，新活动上线不再依赖小程序发版。",
+    ],
+    tech: ["vue", "ts", "js"],
   },
   {
     id: 3,
-    title: "Project Three",
-    description: "A third one to fill the grid nicely.",
-    tech: ["vue", "tailwind", "docker"],
-    href: "https://github.com/yourname/project-three",
+    title: "店务会员小程序",
+    description:
+      "连锁门店店务端的会员管理小程序：档案、标签、待办、回访、分销、导购，170+ 页面。",
+    highlights: [
+      "背景：连锁门店需要店务端小程序沉淀会员资产、管理导购分销，并打通企业微信使用场景。",
+      "任务：参与会员域页面开发与多分包结构维护。",
+      "行动：微信小程序原生开发，主包 52 页 + 3 个分包共 170+ 页，覆盖会员档案（含面部档案）/ 标签 / 待办回访 / 分销导购 / 微信种草（文章、直播分享）/ 优惠券与积分；适配企业微信内打开店务端的视频与页面展示。",
+      "结果：分包化控制主包体积、按需加载，会员管理与种草分销链路线上化。",
+    ],
+    tech: ["js", "html", "css"],
+  },
+  {
+    id: 4,
+    title: "电商小程序（自研组件体系）",
+    description:
+      "原生电商小程序：230+ 页面、50+ 全自研组件、双后端（PHP + Java）请求与埋点体系。",
+    highlights: [
+      "背景：电商小程序需支撑商品、会员、营销全链路，且双后端并存（PHP 主业务 + Java 营销 / 微页面）。",
+      "任务：参与交易域页面开发，并参与架构梳理与重构优化方案的输出。",
+      "行动：主包 25 页 + 商城 / 会员 / 辅助三分包共 230+ 页；自研 50+ 组件（SKU 选择器、瀑布流、秒杀 / 拼团 / 满减、海报 painter、骨架屏等）；参与微页面装修渲染引擎、PHP / Java 双请求层与多套埋点（微页面、销售线索、SR 追踪）的维护迭代；个人完成退款系列页面、支付卡片多状态与预约流程优化。",
+      "结果：启动页跳转统一迁移至 nav2 导航协议；形成完整重构路线图，统一状态与请求规范，降低双后端并行维护成本。",
+    ],
+    tech: ["js", "html", "css"],
   },
 ];

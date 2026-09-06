@@ -52,7 +52,8 @@ const WRAP_RADIUS = 12; // corner radius while wrapped
 const WRAP_EASE = 0.2; // how fast the cursor snaps to/from a target
 const TARGET_PULL = 0.35; // fraction of pointer offset the target travels
 const TARGET_EASE = 0.25; // how fast the target follows the pointer
-const TARGET_MAX_PULL = 12; // px cap so wide targets nudge instead of sliding far
+/** 拉力上限按目标宽度自适应：小按钮 12px，宽按钮（Hero 药丸等）最多 22px */
+const targetPullCap = (width: number) => clamp(width * 0.18, 12, 22);
 const CURSOR_PARALLAX = 0.12; // extra lead of the cursor toward the pointer
 const CURSOR_MAX_LEAD = 10; // px cap on that lead, independent of target size
 
@@ -68,6 +69,8 @@ type Base = {
   height: number;
   cx: number;
   cy: number;
+  /** 目标自身的圆角（包裹形状跟随按钮形状：药丸包成药丸） */
+  radius: number;
 };
 type ActiveTarget = {
   el: HTMLElement | null;
@@ -78,6 +81,9 @@ type Setters = Record<string, Function>;
 
 function measure(el: HTMLElement): Base {
   const r = el.getBoundingClientRect();
+  // border-radius 可能是 "9999px"（药丸）或空；解析失败退回固定小圆角
+  const parsed = parseFloat(getComputedStyle(el).borderRadius);
+  const radius = Number.isFinite(parsed) ? parsed : WRAP_RADIUS;
   return {
     left: r.left,
     top: r.top,
@@ -85,11 +91,15 @@ function measure(el: HTMLElement): Base {
     height: r.height,
     cx: r.left + r.width / 2,
     cy: r.top + r.height / 2,
+    radius,
   };
 }
 
 export function ElasticCursor() {
   const [enabled, setEnabled] = useState(false);
+  /** 首次鼠标移动后才开始渲染循环（原版同款：避免光斑从 (0,0) 角落飞入） */
+  const [cursorMoved, setCursorMoved] = useState(false);
+  const cursorMovedRef = useRef(false);
   // 粗指针（触屏/无鼠标）不启用；窗口变化时跟随更新
   useEffect(() => {
     const mq = window.matchMedia("(pointer: fine)");
@@ -164,15 +174,16 @@ export function ElasticCursor() {
     // Pull the hovered element toward the pointer (magnetic button), capped.
     if (moveTarget && el && active.base) {
       const b = active.base;
+      const cap = targetPullCap(b.width);
       const pullX = clamp(
         (pointer.x - b.cx) * TARGET_PULL,
-        -TARGET_MAX_PULL,
-        TARGET_MAX_PULL,
+        -cap,
+        cap,
       );
       const pullY = clamp(
         (pointer.y - b.cy) * TARGET_PULL,
-        -TARGET_MAX_PULL,
-        TARGET_MAX_PULL,
+        -cap,
+        cap,
       );
       active.offX = lerp(active.offX, pullX, TARGET_EASE);
       active.offY = lerp(active.offY, pullY, TARGET_EASE);
@@ -190,6 +201,9 @@ export function ElasticCursor() {
       b.height = r.height;
       b.cx = b.left + r.width / 2;
       b.cy = b.top + r.height / 2;
+      // 包裹圆角跟随目标形状，上限为包裹框高度的一半（药丸 → 两端半圆）
+      const wrapH = b.height + WRAP_PADDING * 2;
+      jelly.r = lerp(jelly.r, Math.min(b.radius, wrapH / 2), WRAP_EASE);
       const leadX = clamp(
         (pointer.x - b.cx) * CURSOR_PARALLAX,
         -CURSOR_MAX_LEAD,
@@ -206,7 +220,6 @@ export function ElasticCursor() {
       jelly.y = lerp(jelly.y, ty, WRAP_EASE);
       jelly.w = lerp(jelly.w, b.width + WRAP_PADDING * 2, WRAP_EASE);
       jelly.h = lerp(jelly.h, b.height + WRAP_PADDING * 2, WRAP_EASE);
-      jelly.r = lerp(jelly.r, WRAP_RADIUS, WRAP_EASE);
       jelly.sx = lerp(jelly.sx, 1, 0.3);
       jelly.sy = lerp(jelly.sy, 1, 0.3);
       set.x(jelly.x);
@@ -244,13 +257,13 @@ export function ElasticCursor() {
   }, []);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !cursorMoved) return;
     gsap.ticker.add(render);
     return () => {
       gsap.ticker.remove(render);
       document.body.style.cursor = "";
     };
-  }, [enabled, render]);
+  }, [enabled, cursorMoved, render]);
 
   // Track the raw pointer, drive the free-roam spring, and update hide flag.
   useEffect(() => {
@@ -258,12 +271,17 @@ export function ElasticCursor() {
     const onMove = (e: MouseEvent) => {
       pointer.x = e.clientX;
       pointer.y = e.clientY;
+      if (!cursorMovedRef.current) {
+        cursorMovedRef.current = true;
+        setCursorMoved(true);
+      }
+      // 原版同款：不加 overwrite——每次移动都叠加一条 elastic 弹簧，
+      // 旧弹簧继续衰减，新弹簧接管，形成绵长的果冻拖尾形变
       gsap.to(pos, {
         x: e.clientX,
         y: e.clientY,
         duration: 1.5,
         ease: "elastic.out(1, 0.5)",
-        overwrite: true,
         onUpdate: () => {
           vel.x = (e.clientX - pos.x) * 1.2;
           vel.y = (e.clientY - pos.y) * 1.2;
@@ -324,6 +342,8 @@ export function ElasticCursor() {
       const t = target?.closest?.("a, button") as HTMLElement | null;
       if (t === active.el) return;
       if (active.el) release();
+      // 菜单大字导航（.menu-link）保留自身的逐字滚换效果，不做光标包裹
+      if (t && t.classList.contains("menu-link")) return;
       if (t) acquire(t);
     };
     const onLeave = () => {

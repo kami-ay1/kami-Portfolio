@@ -76,7 +76,8 @@ export const STATES: Record<Section, { desktop: Transform; mobile: Transform }> 
     contact: {
       desktop: {
         scale: { x: 0.2, y: 0.2, z: 0.2 },
-        position: { x: 350, y: -250, z: 0 },
+        // 停在右下角空白区，避开居中的联系信息行 / footer 内容列
+        position: { x: 550, y: -280, z: 0 },
         rotation: { x: 0, y: 0, z: 0 },
       },
       mobile: {

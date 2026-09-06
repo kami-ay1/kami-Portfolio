@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Unbounded } from "next/font/google";
-import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import { config } from "@/data/config";
 import { Header } from "@/components/header";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -22,6 +22,11 @@ export const metadata: Metadata = {
   description: config.description,
 };
 
+/**
+ * 主题策略：暗色是站点默认并直接服务端渲染进 <html>（无脚本、无开发警告、无闪烁）。
+ * 偏好亮色的访客由 ThemeProvider 在水合时切到亮色（会有一瞬暗→亮过渡）。
+ * 存储键与旧 next-themes 兼容（localStorage "theme": "dark" | "light"）。
+ */
 export default function RootLayout({
   children,
 }: {
@@ -31,7 +36,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${spaceGrotesk.variable} ${unbounded.variable} font-sans`}
+      className={`dark ${spaceGrotesk.variable} ${unbounded.variable} font-sans`}
     >
       <head>
         {/* Spline 运行时会从 unpkg 拉取 wasm，提前预热连接可加快 3D 场景启动。
@@ -39,9 +44,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://unpkg.com" crossOrigin="anonymous" />
       </head>
       <body>
-        {/* attribute="class" 必须显式声明：next-themes 0.4 默认用 data-theme，
-            而 Tailwind darkMode 和 globals.css 的变量都依赖 .dark 类 */}
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+        <ThemeProvider>
           <Header />
           {children}
         </ThemeProvider>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLenis } from "lenis/react";
 import { config } from "@/data/config";
 import { ThemeToggle } from "./theme-toggle";
+import { MusicToggle } from "./music-toggle";
 import { MenuButton, MenuOverlay } from "./nav-menu";
 import { Guestbook } from "./guestbook/guestbook";
 
@@ -81,6 +82,7 @@ export function Header() {
         </a>
         <div className="flex items-center gap-4">
           <Guestbook />
+          <MusicToggle />
           <ThemeToggle />
           <MenuButton isActive={menuOpen} onClick={() => setMenuOpen((v) => !v)} />
         </div>

@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>交互设计原型 — 3D 键盘作品集</title>
+<style>
+  :root {
+    --bg: #101014; --panel: #16161c; --panel2: #1c1c24;
+    --fg: #f4f4ed; --muted: #9b9b8f; --line: #2a2a33;
+    --olive: #2c2f20; --olive-lt: #dde1d2; --olive-dim: #8f937f;
+    --accent: #5865f2; --green: #57f287;
+    --ease-lando: cubic-bezier(0.65, 0.05, 0.35, 1);
+    --ease-wipe: cubic-bezier(0.76, 0, 0.24, 1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: "Space Grotesk", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.6;
+  }
+  ::selection { background: var(--accent); color: #fff; }
+
+  /* ===== 布局框架 ===== */
+  .layout { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+  aside {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    border-right: 1px solid var(--line); padding: 24px 16px;
+    font-size: 13px; scroll-behavior: smooth;
+  }
+  aside h1 { font-size: 14px; letter-spacing: .05em; margin-bottom: 4px; }
+  aside .sub { color: var(--muted); font-size: 11px; margin-bottom: 20px; }
+  aside a {
+    display: block; color: var(--muted); text-decoration: none;
+    padding: 6px 10px; border-radius: 6px; transition: all .25s var(--ease-lando);
+  }
+  aside a:hover, aside a.on { color: var(--fg); background: var(--panel2); }
+  aside .grp { margin-top: 18px; font-size: 10px; letter-spacing: .2em; color: var(--olive-dim); text-transform: uppercase; padding-left: 10px; }
+  main { padding: 48px clamp(24px, 5vw, 80px) 120px; max-width: 1080px; }
+
+  section { margin-bottom: 96px; scroll-margin-top: 24px; }
+  h2 { font-size: 28px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 6px; }
+  h2 .n { color: var(--olive-dim); font-weight: 400; margin-right: 10px; }
+  .lead { color: var(--muted); font-size: 14px; margin-bottom: 28px; max-width: 640px; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); margin-right: 6px; }
+  .tag.done { border-color: #3d4a3a; color: #a8c79b; }
+  .tag.new { border-color: #4a443a; color: #e0b87b; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 24px; margin-bottom: 20px; }
+  .card h3 { font-size: 16px; margin-bottom: 4px; }
+  .card .desc { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+  code { background: var(--panel2); padding: 1px 7px; border-radius: 5px; font-size: 12px; color: #c9d4e4; }
+
+  /* ===== demo 舞台 ===== */
+  .stage { background: var(--panel2); border: 1px dashed var(--line); border-radius: 10px; padding: 28px; position: relative; overflow: hidden; }
+
+  /* ===== 1 设计 tokens ===== */
+  .swatches { display: flex; gap: 12px; flex-wrap: wrap; }
+  .sw { width: 108px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+  .sw i { display: block; height: 56px; }
+  .sw span { display: block; padding: 6px 9px; font-size: 11px; color: var(--muted); }
+  .sw b { color: var(--fg); font-weight: 600; }
+  .type-row { display: flex; align-items: baseline; gap: 18px; border-bottom: 1px solid var(--line); padding: 12px 0; }
+  .type-row .lbl { width: 200px; color: var(--muted); font-size: 12px; flex-shrink: 0; }
+  @keyframes easeDemo { from { transform: translateX(0); } to { transform: translateX(calc(100% - 44px)); } }
+  .ease-track { height: 44px; background: var(--panel2); border-radius: 8px; position: relative; width: 260px; margin-top: 8px; }
+  .ease-track i { position: absolute; top: 5px; left: 0; width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--fg); animation: easeDemo 1.4s infinite alternate; }
+  .e1 i { animation-timing-function: cubic-bezier(0.65, 0.05, 0.35, 1); }
+  .e2 i { animation-timing-function: cubic-bezier(0.76, 0, 0.24, 1); }
+  .e3 i { animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+  /* ===== 2 弹性光标 demo ===== */
+  .cursor-demo { height: 260px; display: grid; place-items: center; gap: 20px; grid-auto-flow: column; }
+  .demo-blob {
+    position: fixed; pointer-events: none; width: 44px; height: 44px; border-radius: 22px;
+    border: 2px solid #fff; mix-blend-mode: difference; z-index: 50;
+    transition: all .45s cubic-bezier(0.65,0.05,0.35,1); opacity: 0;
+  }
+  .cursor-zone { position: relative; }
+  .cursor-zone.on .demo-blob { opacity: 1; }
+
+  /* ===== 3 菜单 demo ===== */
+  .menu-demo { height: 380px; background: var(--olive); border-radius: 10px; position: relative; overflow: hidden; color: var(--olive-lt); }
+  .menu-demo .fakebar { display: flex; justify-content: space-between; padding: 14px 20px; font-size: 12px; opacity: .85; }
+  .menu-demo .links { position: absolute; right: 7%; top: 50%; transform: translateY(-50%); text-align: right; }
+  .roll { display: inline-block; overflow: hidden; height: 1.05em; font-size: 34px; font-weight: 400; line-height: 1.05; }
+  .roll-inner { display: flex; flex-direction: column; transition: transform .5s cubic-bezier(0.65,0.05,0.35,1); }
+  .menu-demo .mrow:hover .roll-inner { transform: translateY(-50%); }
+  .menu-demo .mrow { cursor: pointer; }
+  .menu-demo .cur { color: var(--olive-dim); position: relative; }
+  .menu-demo .cur::after { content: ""; position: absolute; left: 0; right: 0; bottom: 4px; height: 2px; background: currentColor; }
+  .menu-demo .thumbs { position: absolute; left: 6%; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; }
+  .menu-demo .thumb { width: 64px; height: 40px; border-radius: 8px; background: linear-gradient(135deg,#3a3f2c,#22251b); opacity: .35; filter: grayscale(1); transition: all .5s var(--ease-lando); }
+  .menu-demo .mrow:hover ~ .thumbs .t0, .t-hover0 .thumb.t0 { opacity: 1; filter: none; box-shadow: 0 0 0 2px #dde1d27f; transform: scale(1.06); }
+  .menu-demo .social { position: absolute; right: 7%; bottom: 18px; font-size: 12px; display: flex; gap: 20px; }
+  .sl { position: relative; cursor: pointer; }
+  .sl::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 1px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform .45s var(--ease-lando); }
+  .sl:hover::after { transform: scaleX(1); }
+
+  /* ===== 4 行遮罩升起 demo（自动循环） ===== */
+  .mask-demo { height: 220px; display: grid; place-items: center; }
+  .mask-demo .line { overflow: hidden; font-size: 44px; font-weight: 700; }
+  .mask-demo .line p { animation: riseIn 3.6s var(--ease-lando) infinite; }
+  .mask-demo .line.l2 p { animation-delay: .35s; font-size: 20px; font-weight: 400; color: var(--muted); }
+  @keyframes riseIn {
+    0% { transform: translateY(110%); } 18%, 78% { transform: translateY(0); }
+    92%, 100% { transform: translateY(-110%); }
+  }
+  .corner-path { position: relative; height: 120px; }
+  .corner-path .dock { position: absolute; left: 0; top: 0; border: 1px dashed var(--olive-dim); border-radius: 8px; padding: 10px 16px; font-size: 13px; color: var(--olive-dim); }
+  .corner-path .end { position: absolute; left: 50%; top: 0; transform: translateX(-50%); border: 1px dashed var(--accent); border-radius: 8px; padding: 10px 16px; font-size: 13px; color: #aab6f5; }
+  .corner-path .arrow { position: absolute; left: 130px; top: 22px; width: 200px; color: var(--muted); font-size: 12px; }
+
+  /* ===== 5 聊天/头像 demo ===== */
+  .chat-demo { display: grid; grid-template-columns: 300px 1fr; gap: 24px; align-items: start; }
+  .chat-panel { background: #0b0b0e; border: 1px solid #ffffff1a; border-radius: 12px; overflow: hidden; font-size: 13px; }
+  .chat-panel .hd { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid #ffffff14; }
+  .chat-panel .bd { padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { display: flex; gap: 10px; }
+  .avt { width: 30px; height: 30px; border-radius: 50%; overflow: hidden; flex-shrink: 0; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; }
+  .avatars { display: flex; gap: 10px; flex-wrap: wrap; }
+  .av-pick { text-align: center; font-size: 11px; color: var(--muted); }
+  .av-pick .avt { width: 44px; height: 44px; margin: 0 auto 4px; cursor: pointer; transition: transform .3s var(--ease-lando); }
+  .av-pick:hover .avt { transform: scale(1.12); }
+  .av-pick.sel .avt { box-shadow: 0 0 0 2px var(--accent); }
+  .color-dots { display: flex; gap: 8px; margin-top: 12px; }
+  .cd { width: 24px; height: 24px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform .25s; }
+  .cd:hover { transform: scale(1.15); }
+  .cd.sel { border-color: var(--fg); }
+
+  /* ===== 未完成区方案 ===== */
+  .spec-rows { border-top: 1px solid var(--line); }
+  .spec-row { display: grid; grid-template-columns: 64px 1fr auto; gap: 20px; align-items: center; padding: 22px 12px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .4s var(--ease-lando), padding-left .4s var(--ease-lando); }
+  .spec-row:hover { background: var(--panel2); padding-left: 22px; }
+  .spec-row .no { font-size: 13px; color: var(--olive-dim); }
+  .spec-row .tt { font-size: 20px; font-weight: 600; }
+  .spec-row .meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .spec-row .arr { color: var(--olive-dim); transition: transform .4s var(--ease-lando); font-size: 18px; }
+  .spec-row:hover .arr { transform: translate(4px, -4px); color: var(--fg); }
+  .chips { display: flex; gap: 6px; margin-top: 8px; }
+  .chip { font-size: 11px; padding: 2px 10px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); }
+
+  /* ===== 07 Projects v3.1 —— Featured Work 实测还原 ===== */
+  .fw-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+  .fw-card {
+    position: relative; text-decoration: none; color: inherit; cursor: pointer; display: block;
+    opacity: 0; transform: translateY(60px);
+    transition: opacity .9s var(--ease-lando), transform .9s var(--ease-lando);
+  }
+  .fw-card.in { opacity: 1; transform: translateY(0); }
+  /* 第 3 张起交错下垂（Lusion nth-child(n+3) margin-top 5em→10em 同款） */
+  .fw-card:nth-child(n+3) { margin-top: 24px; }
+
+  /* 图区：65% 比例撑起 + clip 裁切展开入场 */
+  .fw-im {
+    position: relative; padding-top: 65%; border-radius: 15px; overflow: hidden;
+    clip-path: inset(8% 6% 8% 6%);
+    transition: clip-path 1.1s var(--ease-lando);
+  }
+  .fw-card.in .fw-im { clip-path: inset(0 0 0 0); }
+  .fw-im-in {
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, #262733, #191a22);
+    transform: scale(1.12);
+    transition: transform 1.2s var(--ease-lando), filter .7s;
+    filter: brightness(.75) saturate(.9);
+  }
+  .fw-im::after {
+    content: "项目截图 / 3D 预览"; position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: 12px; color: #ffffff55; pointer-events: none;
+  }
+  .fw-card:hover .fw-im-in { transform: scale(1.05); filter: brightness(1.05) saturate(1.1); }
+
+  .fw-l1 {
+    margin: 1.2em 0 .6em; font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); overflow: hidden;
+  }
+  .fw-l1 span {
+    display: inline-block; transform: translateY(110%); transition: transform .7s var(--ease-lando);
+  }
+  .fw-card.in .fw-l1 span { transform: translateY(0); transition-delay: .35s; }
+
+  /* 名称行：overflow hidden 遮罩 + 字符轮盘（入场字符滚入落定，hover 不重播）。
+     hover 时整行文字右移让位，箭头从左侧遮罩外水平滑入到文字前面（原站实测） */
+  .fw-name {
+    position: relative; display: flex; align-items: baseline; flex-wrap: wrap;
+    font-size: clamp(26px, 2.6vw, 40px); font-weight: 400; line-height: 1.12;
+    overflow: hidden;
+  }
+  .rchar { display: inline-block; overflow: hidden; height: 1.12em; }
+  .rstrip { display: flex; flex-direction: column; transition: transform .5s cubic-bezier(.65,.05,.35,1); }
+  .rstrip i { font-style: normal; height: 1.12em; line-height: 1.12; }
+  [data-roulette] {
+    display: inline-block; will-change: transform;
+    transition: transform .45s var(--ease-lando);
+  }
+  .fw-card:hover [data-roulette] { transform: translateX(1.25em); }
+  /* 箭头：静止时在左侧遮罩外（translateX -1.1em 被裁掉），hover 滑入到文字前 */
+  .fw-arr {
+    position: absolute; left: 0; top: 50%; margin-top: -0.52em;
+    font-size: 0.82em; color: var(--fg);
+    transform: translateX(-1.1em); opacity: 0;
+    transition: transform .45s var(--ease-lando), opacity .3s var(--ease-lando);
+  }
+  .fw-card:hover .fw-arr { transform: translateX(0); opacity: 1; }
+  .fw-idx { position: absolute; left: 0; top: -20px; font-size: 11px; color: var(--olive-dim); letter-spacing: .2em; }
+
+  /* ===== 07+ STAR 内容展示两方案 ===== */
+  .plan-tag { font-size: 11px; color: var(--olive-dim); letter-spacing: .08em; margin-bottom: 12px; }
+  .fw-star { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 7px; }
+  .fw-star li { font-size: 12px; line-height: 1.55; color: var(--muted); display: flex; gap: 8px; align-items: flex-start; }
+  .fw-star b { flex-shrink: 0; font-size: 10px; padding: 1px 8px; border-radius: 99px; margin-top: 2px; font-weight: 600; }
+  .fw-star .s { color: #9b9b8f; border: 1px solid var(--line); }
+  .fw-star .t { color: #e0b87b; border: 1px solid #4a443a; }
+  .fw-star .a { color: #aab6f5; border: 1px solid #3a3f66; }
+  .fw-star .r { color: #a8c79b; border: 1px solid #3d4a3a; }
+  .fw-star.big { gap: 10px; }
+  .fw-star.big li { font-size: 13.5px; color: var(--fg); }
+  .star-modal { position: fixed; inset: 0; background: rgba(0,0,0,.65); backdrop-filter: blur(4px); display: none; place-items: center; z-index: 99; }
+  .star-modal.on { display: grid; }
+  .star-panel { width: min(560px, 90vw); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 30px 28px 26px; position: relative; }
+  .star-panel::before { content: ""; position: absolute; top: 0; left: 24px; right: 24px; height: 2px; background: var(--olive-dim); border-radius: 2px; }
+  .star-panel h4 { font-size: 22px; margin: 4px 0 16px; }
+  .star-panel .sub { font-size: 12px; color: var(--muted); margin: -10px 0 16px; }
+  .star-panel .x { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--muted); font-size: 16px; cursor: pointer; }
+  .star-panel .x:hover { color: var(--fg); }
+
+  /* ===== 07 旧 v2（Lusion 大块，备用） ===== */
+  .lusion-item { display: block; text-decoration: none; color: inherit; margin-bottom: 56px; cursor: pointer; }
+  .lusion-item .im {
+    height: 300px; border-radius: 14px; overflow: hidden; position: relative;
+    background: linear-gradient(135deg, #23242e, #171820);
+    transform: scale(.985); opacity: .85;
+    transition: transform .6s var(--ease-lando), opacity .6s var(--ease-lando);
+  }
+  .lusion-item .im::after {
+    content: "项目截图 / 3D 预览"; position: absolute; inset: 0; display: grid; place-items: center;
+    font-size: 12px; color: #ffffff50;
+  }
+  .lusion-item:hover .im { transform: scale(1); opacity: 1; }
+  .lusion-item .l1 {
+    margin-top: 18px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted); overflow: hidden;
+  }
+  .lusion-item .l1 span { display: inline-block; animation: riseIn 6s var(--ease-lando) infinite; }
+  .lusion-item .l2 { position: relative; overflow: hidden; margin-top: 4px; }
+  .lusion-item .l2 .name {
+    font-size: clamp(34px, 4vw, 57.6px); font-weight: 400; line-height: 1.08;
+    display: flex; gap: .32em; overflow: hidden;
+  }
+  .lusion-item .l2 .name b { font-weight: 400; display: inline-block; animation: riseIn 6s var(--ease-lando) .25s infinite; white-space: pre; }
+  .lusion-item .l2 .icon {
+    position: absolute; right: 4px; bottom: 10px; font-size: 26px; color: var(--olive-dim);
+    transition: transform .5s var(--ease-lando), color .5s;
+  }
+  .lusion-item:hover .l2 .icon { transform: translate(6px, -6px); color: var(--fg); }
+  .lusion-item .idx { position: absolute; left: 0; top: -22px; font-size: 11px; color: var(--olive-dim); letter-spacing: .2em; }
+
+  .proj-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 18px; }
+  .proj-card { border-radius: 14px; overflow: hidden; background: var(--panel2); border: 1px solid var(--line); cursor: pointer; transition: transform .5s var(--ease-lando), border-color .5s; }
+  .proj-card:hover { transform: translateY(-6px); border-color: #ffffff30; }
+  .proj-card .im { height: 170px; background: linear-gradient(135deg, #23242e, #171820); position: relative; overflow: hidden; }
+  .proj-card .im::after { content: "▶ 项目截图 / 3D 预览"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; color: #ffffff45; }
+  .proj-card:hover .im::after { transform: scale(1.08); transition: transform .6s var(--ease-lando); }
+  .proj-card .bd { padding: 16px 18px; }
+  .proj-card .no { font-size: 11px; color: var(--olive-dim); }
+  .proj-card h4 { font-size: 17px; margin: 4px 0; }
+  .proj-card p { font-size: 12px; color: var(--muted); }
+
+  .cta-demo { text-align: center; padding: 60px 0 30px; }
+  .cta-demo .giant { font-size: clamp(40px, 7vw, 84px); font-weight: 700; line-height: 1.02; }
+  .cta-demo .giant .accent { color: #aab6f5; }
+  .btn-pill { display: inline-block; margin-top: 28px; padding: 12px 34px; border-radius: 99px; background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; transition: transform .4s var(--ease-lando); }
+  .btn-pill:hover { transform: translateY(-2px); }
+
+  /* ===== 08b Contact 表单弹窗 ===== */
+  .cform {
+    position: relative; width: 400px; max-width: 100%; padding: 26px 26px 22px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  }
+  .cform .cf-bar { position: absolute; left: 0; top: 0; height: 3px; width: 100%; background: var(--olive); border-radius: 16px 16px 0 0; }
+  .cform .cf-x { position: absolute; right: 12px; top: 12px; width: 30px; height: 30px; border-radius: 50%; background: transparent; border: none; color: var(--muted); cursor: pointer; transition: all .3s var(--ease-lando); }
+  .cform .cf-x:hover { color: var(--fg); transform: rotate(90deg); }
+  .cf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 18px; }
+  .cf-field { position: relative; margin-top: 14px; }
+  .cf-grid .cf-field { margin-top: 0; }
+  .cf-field input, .cf-field textarea {
+    width: 100%; background: transparent; border: none; outline: none;
+    border-bottom: 1px solid var(--line); color: var(--fg);
+    font: inherit; font-size: 14px; padding: 9px 2px; resize: none;
+  }
+  .cf-field label {
+    position: absolute; left: 2px; top: 9px; font-size: 13px; color: var(--muted);
+    pointer-events: none; transition: all .3s var(--ease-lando);
+  }
+  .cf-field input:focus + label, .cf-field input:not(:placeholder-shown) + label,
+  .cf-field textarea:focus + label, .cf-field textarea:not(:placeholder-shown) + label {
+    top: -10px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  }
+  .cf-line {
+    position: absolute; left: 0; bottom: 0; height: 2px; width: 100%;
+    background: var(--olive-lt); transform: scaleX(0); transform-origin: left;
+    transition: transform .4s var(--ease-lando);
+  }
+  .cf-field:focus-within .cf-line { transform: scaleX(1); }
+  .cf-field.invalid .cf-line { background: #f87171; transform: scaleX(1); }
+  .cf-field .cf-err {
+    position: absolute; left: 2px; top: 100%; font-size: 10px; color: #f87171;
+    font-style: normal; overflow: hidden; height: 0; transition: height .3s var(--ease-lando);
+  }
+  .cf-field.invalid .cf-err { height: 15px; }
+  .cf-count { position: absolute; right: 2px; bottom: -16px; font-size: 10px; color: var(--olive-dim); font-variant-numeric: tabular-nums; }
+  .cf-send {
+    margin-top: 30px; width: 100%; height: 42px; border: none; border-radius: 99px;
+    background: var(--accent); color: #fff; font-size: 14px; font-weight: 600;
+    cursor: pointer; position: relative; transition: transform .35s var(--ease-lando), background .35s;
+  }
+  .cf-send:hover { transform: translateY(-2px); }
+  .cf-send .cf-send-dot {
+    position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px;
+    border-radius: 50%; background: #fff; opacity: 0; animation: none;
+  }
+  .cf-send.busy .cf-send-txt { opacity: 0; }
+  .cf-send.busy .cf-send-dot { opacity: 1; animation: dotJump .5s ease-in-out infinite alternate; }
+  @keyframes dotJump { from { transform: translateX(-10px); } to { transform: translateX(10px); } }
+  .cf-done {
+    position: absolute; inset: 0; border-radius: 16px; background: var(--panel);
+    display: grid; place-content: center; justify-items: center; gap: 6px;
+    opacity: 0; pointer-events: none; transition: opacity .45s var(--ease-lando);
+  }
+  .cform.sent .cf-done { opacity: 1; pointer-events: auto; }
+  .cf-done .cf-check {
+    width: 52px; height: 52px; border-radius: 50%; background: var(--green); color: #fff;
+    display: grid; place-items: center; font-size: 22px; font-weight: 700;
+    transform: scale(0); transition: transform .5s cubic-bezier(.34,1.56,.64,1);
+  }
+  .cform.sent .cf-done .cf-check { transform: scale(1); }
+  .cf-done b { font-size: 17px; }
+  .cf-done p { font-size: 12px; color: var(--muted); }
+
+  /* ===== 08c Hire Me 联系方式弹窗 ===== */
+  .hire-mask {
+    position: fixed; inset: 0; z-index: 90; display: grid; place-items: center;
+    background: #000000a8; backdrop-filter: blur(6px);
+    opacity: 0; pointer-events: none; transition: opacity .3s var(--ease-lando);
+  }
+  .hire-mask.open { opacity: 1; pointer-events: auto; }
+  .hire-card {
+    position: relative; width: 400px; max-width: calc(100vw - 32px); padding: 26px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    transform: translateY(16px) scale(.95); opacity: 0;
+    transition: transform .3s var(--ease-lando), opacity .3s var(--ease-lando);
+  }
+  .hire-mask.open .hire-card { transform: none; opacity: 1; }
+  .hire-rows { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .hire-row {
+    position: relative; display: flex; align-items: center; gap: 12px; width: 100%;
+    padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--panel2); color: var(--fg); font: inherit; text-align: left;
+    cursor: pointer; text-decoration: none; overflow: hidden;
+    opacity: 0; transform: translateY(14px);
+    transition: background .35s var(--ease-lando), border-color .35s,
+                opacity .6s var(--ease-lando), transform .6s var(--ease-lando);
+  }
+  .hire-mask.open .hire-row { opacity: 1; transform: none; }
+  .hire-mask.open .hire-row:nth-child(1) { transition-delay: .1s; }
+  .hire-mask.open .hire-row:nth-child(2) { transition-delay: .18s; }
+  .hire-mask.open .hire-row:nth-child(3) { transition-delay: .26s; }
+  .hire-row:hover { background: #22232c; border-color: #ffffff2e; }
+  .hire-ic { font-size: 16px; }
+  .hire-k { font-size: 11px; color: var(--muted); width: 44px; flex-shrink: 0; letter-spacing: .06em; }
+  .hire-v { font-size: 14px; font-weight: 600; letter-spacing: .02em; }
+  .hire-ok {
+    margin-left: auto; font-size: 11px; color: var(--green); opacity: 0;
+    transform: translateX(6px); transition: all .35s var(--ease-lando);
+  }
+  .hire-row.copied .hire-ok { opacity: 1; transform: none; }
+
+  .footer-demo { border-top: 1px solid var(--line); padding: 28px 12px 10px; display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); flex-wrap: wrap; gap: 14px; }
+  .footer-demo a { color: var(--muted); text-decoration: none; }
+  .footer-demo a:hover { color: var(--fg); }
+
+  .preloader-demo { height: 200px; border-radius: 10px; background: #0c0c10; display: grid; place-items: center; position: relative; }
+  .preloader-demo .keycap { width: 54px; height: 54px; border-radius: 10px; background: #1e1f27; border: 1px solid #ffffff1c; display: grid; place-items: center; font-size: 20px; animation: keyPulse 1.6s ease-in-out infinite; }
+  @keyframes keyPulse { 0%,100% { transform: translateY(0); box-shadow: 0 6px 0 #0a0a0d; } 50% { transform: translateY(4px); box-shadow: 0 2px 0 #0a0a0d; } }
+  .preloader-demo .pct { position: absolute; bottom: 18px; right: 22px; font-size: 12px; color: var(--olive-dim); font-variant-numeric: tabular-nums; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { color: var(--olive-dim); font-weight: 500; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+  td .ok { color: var(--green); }
+
+  .check { list-style: none; }
+  .check li { padding: 8px 0 8px 30px; position: relative; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .check li::before { content: "☐"; position: absolute; left: 4px; color: var(--olive-dim); }
+</style>
+</head>
+<body>
+<div class="layout">
+<aside>
+  <h1>3D 键盘作品集</h1>
+  <div class="sub">交互设计原型 v1 · 2026-09</div>
+  <div class="grp">设计语言</div>
+  <a href="#tokens">01 设计 Tokens</a>
+  <div class="grp">已完成 · 组件实录</div>
+  <a href="#cursor">02 弹性光标</a>
+  <a href="#menu">03 全屏菜单</a>
+  <a href="#title">04 标题行遮罩动画</a>
+  <a href="#chat">05 留言板与头像</a>
+  <div class="grp">未完成 · 方案原型</div>
+  <a href="#exp">06 Experience 重设计</a>
+  <a href="#proj">07 Projects 重设计</a>
+  <a href="#contact">08 Contact / Footer</a>
+  <a href="#preloader">09 Preloader</a>
+  <div class="grp">规范与验收</div>
+  <a href="#spec">10 交互规范总表</a>
+  <a href="#accept">11 验收清单</a>
+</aside>
+
+<main>
+
+<!-- ============ 01 TOKENS ============ -->
+<section id="tokens">
+  <h2><span class="n">01</span>设计 Tokens</h2>
+  <p class="lead">全站统一的设计语言基础。暗色为默认主题（键盘场景主战场），亮色为辅助主题；菜单使用独立的橄榄色单色系。</p>
+
+  <div class="card">
+    <h3>色彩系统</h3>
+    <div class="desc">站点双色主题 + 菜单专用橄榄色（提取自 landonorris.com）</div>
+    <div class="swatches">
+      <div class="sw"><i style="background:#101014"></i><span><b>暗色底</b><br>#101014</span></div>
+      <div class="sw"><i style="background:#f4f4ed;border-bottom:1px solid #ddd"></i><span><b>亮色底</b><br>#F4F4ED</span></div>
+      <div class="sw"><i style="background:#2c2f20"></i><span><b>橄榄·暗</b><br>#2C2F20</span></div>
+      <div class="sw"><i style="background:#dde1d2"></i><span><b>橄榄·亮</b><br>#DDE1D2</span></div>
+      <div class="sw"><i style="background:#8f937f"></i><span><b>橄榄·灰</b><br>#8F937F</span></div>
+      <div class="sw"><i style="background:#5865f2"></i><span><b>强调色</b><br>#5865F2</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>字体阶梯</h3>
+    <div class="desc">Space Grotesk（正文/界面）+ Unbounded（展示标题），中文回退系统黑体</div>
+    <div class="type-row"><span class="lbl">菜单导航 · 70px / w400 / 右对齐</span><span style="font-size:44px;font-weight:400">On Track</span></div>
+    <div class="type-row"><span class="lbl">章节标题 · 48px / w700（行遮罩升起）</span><span style="font-size:30px;font-weight:700">Tech Stack</span></div>
+    <div class="type-row"><span class="lbl">区块编号 · 13px / 橄榄灰</span><span style="font-size:13px;color:var(--olive-dim)">01 — EXPERIENCE</span></div>
+    <div class="type-row"><span class="lbl">正文 · 14px / muted</span><span style="font-size:14px;color:var(--muted)">负责把创意做成能跑的产品。</span></div>
+  </div>
+
+  <div class="card">
+    <h3>运动曲线（全站只用三条）</h3>
+    <div class="desc">所有动效的缓动都从这三条里选，保证手感统一</div>
+    <div style="display:flex;gap:32px;flex-wrap:wrap">
+      <div class="ease-track e1"><i></i></div>
+      <div class="ease-track e2"><i></i></div>
+      <div class="ease-track e3"><i></i></div>
+    </div>
+    <div style="display:flex;gap:32px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px">
+      <span style="width:260px">Lando 曲线 <code>(.65,.05,.35,1)</code> — 菜单/按钮/光标</span>
+      <span style="width:260px">Wipe 曲线 <code>(.76,0,.24,1)</code> — 擦除/字符入场</span>
+      <span style="width:260px">回弹曲线 <code>(.34,1.56,.64,1)</code> — 磁吸释放</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 CURSOR ============ -->
+<section id="cursor">
+  <h2><span class="n">02</span>弹性光标 <span class="tag done">已完成</span></h2>
+  <p class="lead">源项目同款 ElasticCursor：反色果冻光斑弹性跟随 + 磁吸包裹 + 速度挤压形变。把鼠标移入下方演示区体验。</p>
+  <div class="card">
+    <div class="stage cursor-zone" id="cz">
+      <div class="cursor-demo">
+        <button class="demo-magnet" style="padding:10px 22px;border-radius:99px;border:1px solid var(--line);background:transparent;color:var(--fg);font-size:13px;cursor:pointer">磁吸药丸按钮</button>
+        <button class="demo-magnet" style="padding:12px 16px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--fg);font-size:13px;cursor:pointer">方形按钮</button>
+      </div>
+      <div class="demo-blob" id="blob"></div>
+    </div>
+    <div class="desc" style="margin-top:14px">
+      规则：目标圆角自适应（药丸包药丸）· 拉力上限随按钮宽度 12~22px · 聊天面板/弹窗内完全还原系统光标 · 触屏禁用。<br>
+      文字链接（菜单大字）不包裹，只保留自身滚字效果。
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 MENU ============ -->
+<section id="menu">
+  <h2><span class="n">03</span>全屏菜单 <span class="tag done">已完成</span></h2>
+  <p class="lead">Lando 风格：橄榄实色全屏、右对齐大字、逐字上滚 hover、当前区块置灰+下划线、左侧缩略图列 + 中央大图联动、社媒下划线从左向右展开。鼠标划过下面的链接行看滚字效果。</p>
+  <div class="card">
+    <div class="menu-demo">
+      <div class="fakebar"><span>Your Name</span><span style="letter-spacing:.2em">MENU ✕</span></div>
+      <div class="links">
+        <div class="mrow"><span class="roll"><span class="roll-inner"><span>Home</span><span>Home</span></span></span></div>
+        <div class="mrow cur"><span class="roll"><span class="roll-inner"><span>Skills</span><span>Skills</span></span></span></span></div>
+        <div class="mrow"><span class="roll"><span class="roll-inner"><span>Experience</span><span>Experience</span></span></span></span></div>
+        <div class="mrow"><span class="roll"><span class="roll-inner"><span>Projects</span><span>Projects</span></span></span></span></div>
+        <div class="mrow"><span class="roll"><span class="roll-inner"><span>Contact</span><span>Contact</span></span></span></span></div>
+      </div>
+      <div class="thumbs">
+        <div class="thumb t0"></div><div class="thumb"></div><div class="thumb"></div><div class="thumb"></div><div class="thumb"></div>
+      </div>
+      <div class="social"><span class="sl">github</span><span class="sl">linkedin</span></div>
+    </div>
+    <div class="desc" style="margin-top:14px">
+      开合 0.75s Lando 曲线 clip-path 擦入 · 打开时滚动锁定（Lenis stop + 滚动条隐藏）· 关闭时顶栏等面板收完再变色。<br>
+      联动：hover 链接 → 左列对应缩略图点亮 + 中央大图区切换；无 hover 时显示当前区块大图。
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 TITLE ============ -->
+<section id="title">
+  <h2><span class="n">04</span>标题行遮罩动画 <span class="tag done">已完成</span></h2>
+  <p class="lead">Lusion 式 "BOLD Ideas" 出现逻辑：每行一个 overflow-hidden 遮罩，文字从遮罩下缘升起、行间错峰、无淡入淡出，随滚动 scrub 可逆。左侧为技能区标题的完整编排。</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div class="card">
+      <div class="stage mask-demo">
+        <div>
+          <div class="line"><p>Tech Stack</p></div>
+          <div class="line l2"><p>(hint: press a key / hover the keycaps)</p></div>
+        </div>
+      </div>
+      <div class="desc" style="margin-top:12px">入场 35% 区间 power2.out 升起，主行先、副行错峰 +14%；离场向上穿出遮罩。</div>
+    </div>
+    <div class="card">
+      <h3>位移编排（仅水平）</h3>
+      <div class="stage" style="margin-top:8px">
+        <div class="corner-path">
+          <div class="dock">Tech Stack<br><small>起点 · 左上角停靠</small></div>
+          <div class="arrow">——— scrub 同步键盘过渡 ——▶</div>
+          <div class="end">Tech Stack<br><small>终点 · 水平居中</small></div>
+        </div>
+      </div>
+      <div class="desc" style="margin-top:12px">与键盘 home→中心过渡共用同一 ScrollTrigger 区间（top 50% → bottom bottom），只做水平居中，垂直保持停靠高度。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 CHAT ============ -->
+<section id="chat">
+  <h2><span class="n">05</span>留言板与头像 <span class="tag done">已完成</span></h2>
+  <p class="lead">Discord 风聊天面板 + DiceBear lorelei-neutral 本地头像（100 张、透明底）+ 主题色衬底。点头像体验选色。</p>
+  <div class="card">
+    <div class="chat-demo">
+      <div class="chat-panel">
+        <div class="hd"><span><b>#</b> general <span style="color:var(--green)">●</span></span><span style="color:var(--muted)">👤 3 ✕</span></div>
+        <div class="bd">
+          <div class="msg"><div class="avt" style="background:#5865f2"><svg viewBox="0 0 24 24" width="16" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div><div><b style="font-size:12px">Cosmic Otter 7</b> <span style="color:#666;font-size:10px">14:02</span><div style="color:#bbb">这个键盘可以点！</div></div></div>
+          <div class="msg"><div class="avt" id="demoAvt" style="background:#4ade80"><svg viewBox="0 0 24 24" width="16" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div><div><b style="font-size:12px">Sunny Fox 42（你）</b> <span style="color:#666;font-size:10px">14:03</span><div style="color:#bbb">确实 😄</div></div></div>
+        </div>
+      </div>
+      <div>
+        <div class="avatars" id="avRow">
+          <div class="av-pick sel"><div class="avt" style="background:#4ade80"></div>#1</div>
+          <div class="av-pick"><div class="avt" style="background:#f87171"></div>#2</div>
+          <div class="av-pick"><div class="avt" style="background:#60a5fa"></div>#3</div>
+          <div class="av-pick"><div class="avt" style="background:#facc15"></div>#4</div>
+          <div class="av-pick"><div class="avt" style="background:#c084fc"></div>#5</div>
+          <div class="av-pick"><div class="avt" style="background:#fb923c"></div>#6</div>
+        </div>
+        <div class="color-dots" id="colorRow">
+          <div class="cd sel" style="background:#4ade80"></div><div class="cd" style="background:#f87171"></div>
+          <div class="cd" style="background:#60a5fa"></div><div class="cd" style="background:#facc15"></div>
+          <div class="cd" style="background:#c084fc"></div><div class="cd" style="background:#fb923c"></div>
+        </div>
+        <div class="desc" style="margin-top:14px">
+          头像 = lorelei-neutral 线稿 + 主题色衬底；弹窗内 100 宫格选择、名字/颜色同改。<br>
+          身份 localStorage 持久化；在线名单、乐观发送、面板外点击关闭、自定义椭圆滚动条。
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 EXPERIENCE ============ -->
+<section id="exp">
+  <h2><span class="n">06</span>Experience 重设计 <span class="tag new">方案</span></h2>
+  <p class="lead">参考 kasane-keyboard 的「编号规格行」+ Lusion 行遮罩：经历改为编号大行列表（01/02/03），每行 = 职位 + 公司 + 时期，hover 整行右移点亮 + 箭头指向，技能 chips 内联。滚动入场沿用行遮罩升起。替代现有的居中窄栏时间线。</p>
+  <div class="card">
+    <div class="stage" style="padding:10px 4px">
+      <div class="spec-rows">
+        <div class="spec-row">
+          <span class="no">01 / 2023—NOW</span>
+          <div>
+            <div class="tt">Senior Frontend Engineer <span style="color:var(--muted);font-weight:400">@ 某公司</span></div>
+            <div class="meta">负责 3D 互动产品线的架构与渲染性能。</div>
+            <div class="chips"><span class="chip">React</span><span class="chip">Three.js</span><span class="chip">GSAP</span></div>
+          </div>
+          <span class="arr">↗</span>
+        </div>
+        <div class="spec-row">
+          <span class="no">02 / 2021—2023</span>
+          <div>
+            <div class="tt">Full Stack Developer <span style="color:var(--muted);font-weight:400">@ 某公司</span></div>
+            <div class="meta">从零搭建设计系统与 B 端平台。</div>
+            <div class="chips"><span class="chip">Next.js</span><span class="chip">Node</span></div>
+          </div>
+          <span class="arr">↗</span>
+        </div>
+        <div class="spec-row">
+          <span class="no">03 / 2020—2021</span>
+          <div>
+            <div class="tt">Intern <span style="color:var(--muted);font-weight:400">@ 某实验室</span></div>
+            <div class="meta">数据可视化方向。</div>
+            <div class="chips"><span class="chip">D3</span></div>
+          </div>
+          <span class="arr">↗</span>
+        </div>
+      </div>
+    </div>
+    <div class="desc" style="margin-top:14px">
+      交互细节：① 行入场 = 行遮罩升起（整行作为一个遮罩单元，stagger 逐行）② hover = 行背景亮起 + 左 padding 增大 + 箭头右上移动 ③ 弹性光标不包裹行（与菜单大字同策略），但箭头 ↗ 单独可包裹 ④ 移动端行堆叠、chips 折行。<br>
+      <b>需要你补充真实经历数据（src/data/content.ts 的 EXPERIENCE）。</b>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 PROJECTS ============ -->
+<section id="proj">
+  <h2><span class="n">07</span>Projects 重设计 v3 <span class="tag new">方案</span></h2>
+  <p class="lead">按 lusion.co 首页 <b>Featured Work</b> 区实测重做：<b>两列网格</b>，每卡 = 图区（内层图视差缩放）+ 技术标签行 + <b>字符轮盘大字项目名</b>（每个字符是一条竖排字条，入场/hover 时逐字符滚动轮换再落定——Lusion 标志性字母老虎机）+ 右下箭头。<b>把鼠标放到项目名上体验字符轮盘。</b></p>
+  <div class="card">
+    <div class="stage">
+      <div class="fw-grid">
+        <a class="fw-card">
+          <span class="fw-idx">P·01</span>
+          <div class="fw-im"><div class="fw-im-in"></div></div>
+          <div class="fw-l1"><span>next.js • spline • gsap • typescript</span></div>
+          <div class="fw-name">
+            <span class="fw-arr">→</span>
+            <span data-roulette>Keyboard Site</span>
+          </div>
+        </a>
+        <a class="fw-card">
+          <span class="fw-idx">P·02</span>
+          <div class="fw-im"><div class="fw-im-in" style="background:linear-gradient(135deg,#1f2a26,#191a22)"></div></div>
+          <div class="fw-l1"><span>websocket • crdt • canvas</span></div>
+          <div class="fw-name">
+            <span class="fw-arr">→</span>
+            <span data-roulette>Whiteboard</span>
+          </div>
+        </a>
+      </div>
+    </div>
+    <div class="desc" style="margin-top:14px">
+      显隐与悬浮（对照 Featured Work CSS+逐帧实测）：① <b>入场</b> = 卡片从下 60px 升起 + 图区 clip-path 8%→0 展开（内层 scale 1.12→1）+ 标签/箭头错峰；第 3 张起交错下垂 ② <b>hover</b> = 图内层 scale 1.05 提亮增饱和；<b>文字本身零变化</b>（颜色/位移不动）——唯一文字动效是<b>箭头 → 从名称左侧遮罩外水平滑入到文字前面</b>（原站实测 transform -1em→+1em），字符轮盘只在入场滚一次、hover 不重播 ③ 光标策略：卡不包裹、箭头可包裹。<br>
+      <b>需要你补充：真实项目名 / 技术标签 / 链接 / 截图。</b>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>STAR 内容展示 —— 已定方案 B <span class="tag done">已确认</span></h3>
+    <div class="desc">项目按 STAR 写清楚（背景 / 任务 / 行动 / 结果）。承载方式已确认：<b>方案 B</b> —— 卡片保持 Lusion 极简，<b>点击卡片弹层看详情</b>（下方演示可交互；方案 A 常显四行留作对照）。</div>
+    <div class="stage">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px">
+        <div>
+          <div class="plan-tag">方案 A · 卡片下方常显四行小字（信息直达，求职站推荐）</div>
+          <a class="fw-card in" style="display:block">
+            <div class="fw-im" style="padding-top:52%"><div class="fw-im-in in"></div></div>
+            <div class="fw-l1" style="position:static"><span>vue3 • typescript • echarts</span></div>
+            <div class="fw-name" style="font-size:24px"><span>CRM 管理后台</span></div>
+            <ul class="fw-star">
+              <li><b class="s">背景</b><span>文旅 CRM 旧系统高耦合、迭代困难，需在微前端架构下升级重构</span></li>
+              <li><b class="t">任务</b><span>负责营销中心与会员模块的玩法页面开发及通用能力建设</span></li>
+              <li><b class="a">行动</b><span>10+ 营销玩法页面 + 会员积分模块；封装宽表水平滚动条组件统一接入</span></li>
+              <li><b class="r">结果</b><span>子应用独立部署运行，配置化开发减少重复代码、效率 +40%</span></li>
+            </ul>
+          </a>
+        </div>
+        <div>
+          <div class="plan-tag">方案 B · 卡片保持 Lusion 极简，点击弹层看详情（原味，先声夺人）</div>
+          <a class="fw-card in" style="display:block;cursor:pointer" onclick="document.getElementById('starModal').classList.add('on')">
+            <div class="fw-im" style="padding-top:52%"><div class="fw-im-in in"></div></div>
+            <div class="fw-l1" style="position:static"><span>vue3 • typescript • echarts</span></div>
+            <div class="fw-name" style="font-size:24px"><span>CRM 管理后台</span></div>
+            <div style="font-size:12px;color:var(--olive-dim);margin-top:12px">点击卡片 → 弹层展开 STAR 详情 ↗</div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="star-modal" id="starModal" onclick="if(event.target===this)this.classList.remove('on')">
+    <div class="star-panel">
+      <button class="x" onclick="document.getElementById('starModal').classList.remove('on')">✕</button>
+      <h4>CRM 管理后台</h4>
+      <p class="sub">vue3 • typescript • echarts • qiankun</p>
+      <ul class="fw-star big">
+        <li><b class="s">背景</b><span>文旅平台 CRM 旧系统模块高耦合、迭代困难，需在 qiankun 微前端架构下升级重构。</span></li>
+        <li><b class="t">任务</b><span>负责营销中心与会员模块的玩法页面开发及通用能力建设。</span></li>
+        <li><b class="a">行动</b><span>开发拼团 / 预售 / 助力 / 加价购 / 满折满减折扣等 10+ 营销玩法页面与会员积分模块；封装宽表水平滚动条组件统一多页交互。</span></li>
+        <li><b class="r">结果</b><span>子应用模块化部署、独立运行；订单分账导出与积分查询链路修复优化，配置页与小程序端经 nav2 协议统一启动跳转。</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 CONTACT / FOOTER ============ -->
+<section id="contact">
+  <h2><span class="n">08</span>Contact 与 Footer <span class="tag new">方案</span></h2>
+  <p class="lead">Contact 收敛为 Lusion 式巨型宣言 + 单一 CTA（现有邮件弹窗保留作为点击后续）；Footer 走 kasane 式极简一行。</p>
+  <div class="card">
+    <div class="stage">
+      <div class="cta-demo">
+        <div class="giant">
+          <div class="line" style="overflow:hidden"><p style="animation:riseIn 4s var(--ease-lando) infinite">Let's work</p></div>
+          <div class="line" style="overflow:hidden"><p class="accent" style="animation:riseIn 4s var(--ease-lando) .3s infinite">together</p></div>
+        </div>
+        <span class="btn-pill">Say Hello →</span>
+      </div>
+    </div>
+    <div class="desc" style="margin-top:14px">巨字行遮罩升起 + 副行错峰；CTA 药丸按钮被光标磁吸包裹；点击打开既有 ContactModal（Resend 邮件直投，已实现）。</div>
+  </div>
+  <div class="card">
+    <h3>Footer（新增性质）</h3>
+    <div class="stage">
+      <div class="footer-demo">
+        <span>© 2026 Your Name</span>
+        <span><a href="#">github</a> · <a href="#">email</a></span>
+        <span>3D scene credit: Naresh Khatri · <a href="#">Back to top ↑</a></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Contact 表单弹窗重设计 <span class="tag new">方案</span></h3>
+    <div class="desc">现状：功能完整但视觉是早期版本（彩虹渐变条、普通圆角输入框），与新设计语言脱节。重设计：<b>下划线式输入框</b>（kasane 极简风）+ Lando 曲线 + 状态机动效。下面的演示<b>完全可交互</b>：点输入框看聚焦下划线展开、空提交看校验、填写后提交看发送→成功动效。</div>
+    <div class="stage" style="display:grid;place-items:center;padding:34px 10px">
+      <div class="cform" id="cform">
+        <div class="cf-bar"></div>
+        <button class="cf-x" id="cfClose" title="演示：关闭被拦截">✕</button>
+        <h3 style="font-size:22px;font-weight:700">给我留言</h3>
+        <p style="font-size:12px;color:var(--muted);margin-top:2px">填写下面的表单，内容会直接发到我的邮箱。</p>
+        <div class="cf-grid">
+          <div class="cf-field">
+            <input id="cfName" placeholder=" " maxlength="40" autocomplete="off">
+            <label for="cfName">你的名字</label>
+            <i class="cf-line"></i>
+            <em class="cf-err">请填写名字</em>
+          </div>
+          <div class="cf-field">
+            <input id="cfMail" placeholder=" " maxlength="80" autocomplete="off">
+            <label for="cfMail">邮箱</label>
+            <i class="cf-line"></i>
+            <em class="cf-err">邮箱格式不正确</em>
+          </div>
+        </div>
+        <div class="cf-field">
+          <textarea id="cfMsg" rows="4" placeholder=" " maxlength="500"></textarea>
+          <label for="cfMsg">想说的话</label>
+          <i class="cf-line"></i>
+          <em class="cf-err">想说点什么呢</em>
+          <span class="cf-count" id="cfCount">0 / 500</span>
+        </div>
+        <button class="cf-send" id="cfSend">
+          <span class="cf-send-txt">发送留言</span>
+          <span class="cf-send-dot"></span>
+        </button>
+        <div class="cf-done" id="cfDone">
+          <span class="cf-check">✓</span>
+          <b>发送成功！</b>
+          <p>谢谢你的留言，我会尽快回复你。</p>
+        </div>
+      </div>
+    </div>
+    <div class="desc" style="margin-top:14px">
+      交互规格：① 输入框无框只有底线，聚焦时底线<b>从左向右展开</b>（Lando 曲线 0.4s），label 浮起 ② 校验失败：底线变红 + 错误文案升起（行遮罩）③ 提交按钮：点击 → 文字淡出圆点跳动（发送中）→ 成功后整个表单擦出、✓ 打勾弹入（回弹曲线）④ 顶部彩条改为<b>橄榄色单色细条</b> ⑤ 弹窗入场：scale .95→1 + y 16→0（Lando 0.3s）；Esc / 点击遮罩关闭 ⑥ 弹窗内为系统光标区（data-no-custom-cursor，已实现）⑦ 字数计数器右下角常显。<br>
+      功能层（校验/限流/Resend 发送/mailto 回退）保留现有实现不动，只换 UI。
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Contact 区联系信息行 <span class="tag new">方案</span></h3>
+    <div class="desc">Hire Me 保持跳转到 Contact 区（原行为）。微信号 / 手机 / 邮箱以<b>三行联系信息</b>形式展示在 CTA 下方，点击复制（✓ 反馈），邮箱行可 mailto。行的显隐 = 行遮罩升起，hover 背景微亮。</div>
+    <div class="stage" style="padding:26px 10px">
+      <div class="hire-rows" style="max-width:420px;margin:0 auto">
+        <button class="hire-row" data-copy="your-wechat-id">
+          <span class="hire-ic">💬</span>
+          <span class="hire-k">微信号</span>
+          <span class="hire-v">your-wechat-id</span>
+          <span class="hire-ok">✓ copied</span>
+        </button>
+        <button class="hire-row" data-copy="+86 138 0000 0000">
+          <span class="hire-ic">📱</span>
+          <span class="hire-k">手机</span>
+          <span class="hire-v">+86 138 0000 0000</span>
+          <span class="hire-ok">✓ copied</span>
+        </button>
+        <a class="hire-row" href="mailto:you@example.com">
+          <span class="hire-ic">✉️</span>
+          <span class="hire-k">邮箱</span>
+          <span class="hire-v">you@example.com</span>
+          <span class="hire-ok">✓ copied</span>
+        </a>
+      </div>
+    </div>
+    <div class="desc" style="margin-top:14px">点击行 = 复制 + "✓ copied" 反馈（演示可试）；Say Hello CTA 打开表单弹窗（留言用），联系信息行直接展示（复制用）——两种联系方式并存。<b>需要你提供：真实微信号 / 手机号。</b></div>
+  </div>
+</section>
+
+<!-- ============ 09 PRELOADER ============ -->
+<section id="preloader">
+  <h2><span class="n">09</span>Preloader <span class="tag new">方案</span></h2>
+  <p class="lead">参考 kasane 的百分比门禁 + 源项目的加载条复用思路：首访用「键帽按压 + 百分比」加载屏，百分比驱动键帽下压进度；加载完键帽弹起、屏体向上擦出。仅首次访问显示（session 内不重复）。</p>
+  <div class="card">
+    <div class="preloader-demo">
+      <div class="keycap">⌨</div>
+      <div class="pct" id="plPct">Loading 0%</div>
+    </div>
+    <div class="desc" style="margin-top:14px">
+      细节：数字等宽字体滚动到 100% → 键帽回弹（回弹曲线）→ 整屏 clip-path 向上擦出（Wipe 曲线 0.75s）→ 键盘 hero 入场衔接。资源就绪但 &lt;800ms 时也直接放行，避免快网闪烁。
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 SPEC ============ -->
+<section id="spec">
+  <h2><span class="n">10</span>交互规范总表</h2>
+  <p class="lead">每个区域的光标行为 / 入场动画 / hover 行为一览，开发时按此对齐。</p>
+  <div class="card" style="padding:8px 16px">
+    <table>
+      <tr><th>区域</th><th>弹性光标</th><th>入场</th><th>悬浮</th></tr>
+      <tr><td>顶栏按钮</td><td>包裹（形状自适应）+ 磁吸</td><td>—</td><td>中心晕开着色 8%</td></tr>
+      <tr><td>菜单大字</td><td><span class="ok">不包裹</span></td><td>逐字符上浮</td><td>逐字上滚</td></tr>
+      <tr><td>菜单缩略图</td><td>不包裹（已自发光标联动）</td><td>—</td><td>点亮 + 描边</td></tr>
+      <tr><td>Hero 按钮</td><td>包裹药丸形 + 磁吸增强</td><td>—</td><td>无底色（光标即反馈）</td></tr>
+      <tr><td>Experience 行</td><td>不包裹（箭头 ↗ 包裹）</td><td>行遮罩升起 stagger</td><td>行亮起 + 右移 + 箭头 ↗</td></tr>
+      <tr><td>Projects 两列卡</td><td>不包裹（箭头 → 包裹）</td><td>卡片升起 + 图区 clip 展开 + 轮盘落定</td><td>hover 仅图提亮 + 箭头→滑入名称左侧（文字零变化）</td></tr>
+      <tr><td>Contact CTA</td><td>包裹药丸 + 磁吸</td><td>巨字行遮罩</td><td>上浮 2px</td></tr>
+      <tr><td>聊天/弹窗内</td><td><span class="ok">系统光标</span></td><td>面板弹入 0.2s</td><td>原生控件行为</td></tr>
+      <tr><td>键帽</td><td>系统光标（3D 拾取）</td><td>滚动编排</td><td>按下/悬浮 → 3D 文字面板</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ============ 11 ACCEPT ============ -->
+<section id="accept">
+  <h2><span class="n">11</span>验收清单</h2>
+  <p class="lead">逐项确认或提出修改，全部勾完即按此原型实施未完成部分。</p>
+  <div class="card" style="padding:12px 24px">
+    <ul class="check">
+      <li>设计 Tokens：暗/亮/橄榄三套色彩、字体阶梯、三条运动曲线 —— 是否认可？</li>
+      <li>Experience：编号行列表（替代时间线）—— 版式、hover 右移点亮、chips 内联是否 OK？</li>
+      <li>Projects v3.1：两列卡（图区 clip 展开入场 + 字符轮盘落定；hover 仅图提亮 + 箭头→滑入文字左侧，文字本身零变化）—— 是否 OK？</li>
+      <li>Contact 表单弹窗：下划线式输入框（聚焦展开）+ 校验红线上浮 + 发送点点动 + 成功打勾回弹，彩条改橄榄单色 —— 是否 OK？</li>
+      <li>Hire Me 保持跳转 Contact 区；联系方式（微信号/手机/邮箱）以点击复制的行形式展示在 Contact CTA 下方 —— 是否 OK？</li>
+      <li>Contact：巨型宣言定为 "Let's work together" + Say Hello CTA，是否 OK？</li>
+      <li>Footer：一行式极简（含场景 credit + 回顶部）是否 OK？</li>
+      <li>Preloader：键帽按压 + 百分比、仅首访显示是否 OK？</li>
+      <li>交互规范表：光标包裹/不包裹的区域划分是否符合预期？</li>
+    </ul>
+  </div>
+  <p style="color:var(--muted);font-size:12px;margin-top:20px">
+    备注：本原型中所有动效均为可运行的 CSS/JS 实现，与站点实际实现同曲线同时长；头像/光标演示区可直接交互。确认后：Experience/Projects/Contact/Footer/Preloader 按此实施，已有组件不动。
+  </p>
+</section>
+
+</main>
+</div>
+
+<script>
+  // ---- 02 弹性光标演示（简化版：跟随 + 包裹 + 挤压）----
+  (function () {
+    const zone = document.getElementById("cz");
+    const blob = document.getElementById("blob");
+    let x = 0, y = 0, tx = 0, ty = 0, w = 44, h = 44, r = 22;
+    let active = null, base = null;
+
+    zone.addEventListener("mousemove", (e) => {
+      const rect = zone.getBoundingClientRect();
+      tx = e.clientX - rect.left + zone.offsetLeft;
+      ty = e.clientY - rect.top + zone.offsetTop;
+      const t = e.target.closest(".demo-magnet");
+      if (t !== active) {
+        active = t;
+        base = t ? t.getBoundingClientRect() : null;
+      }
+    });
+    zone.addEventListener("mouseenter", () => zone.classList.add("on"));
+    zone.addEventListener("mouseleave", () => { zone.classList.remove("on"); active = null; });
+
+    (function loop() {
+      let gx, gy, gw, gh, gr;
+      if (active && base) {
+        const zr = zone.getBoundingClientRect();
+        gx = base.left - zr.left + base.width / 2 + zone.offsetLeft;
+        gy = base.top - zr.top + base.height / 2 + zone.offsetTop;
+        gw = base.width + 14; gh = base.height + 14;
+        const rad = parseFloat(getComputedStyle(active).borderRadius) || 8;
+        gr = Math.min(rad, gh / 2);
+      } else {
+        gx = tx; gy = ty; gw = 44 + Math.min(Math.abs(tx - x) * 0.6, 26); gh = 44; gr = 22;
+      }
+      x += (gx - x) * 0.18; y += (gy - y) * 0.18;
+      w += (gw - w) * 0.2; h += (gh - h) * 0.2; r += (gr - r) * 0.2;
+      blob.style.transform = `translate(${x - w / 2}px, ${y - h / 2}px)`;
+      blob.style.width = w + "px"; blob.style.height = h + "px";
+      blob.style.borderRadius = r + "px";
+      requestAnimationFrame(loop);
+    })();
+  })();
+
+  // ---- 07 字符轮盘（Lusion Featured Work 式）----
+  (function () {
+    const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const makeStrip = (ch) => {
+      const strip = document.createElement("span");
+      strip.className = "rstrip";
+      const seq = [];
+      for (let i = 0; i < 4; i++) seq.push(GLYPHS[Math.floor(Math.random() * GLYPHS.length)]);
+      seq.push(ch === " " ? " " : ch);
+      seq.forEach((g) => {
+        const it = document.createElement("i");
+        it.textContent = g === " " ? "\u00A0" : g;
+        strip.appendChild(it);
+      });
+      return strip;
+    };
+    document.querySelectorAll("[data-roulette]").forEach((el) => {
+      if (el.dataset.rouletted) return;
+      el.dataset.rouletted = "1";
+      const text = el.textContent;
+      el.textContent = "";
+      const chars = [];
+      [...text].forEach((ch) => {
+        const w = document.createElement("span");
+        w.className = "rchar";
+        const strip = makeStrip(ch);
+        w.appendChild(strip);
+        el.appendChild(w);
+        chars.push({ strip, final: 4 });
+      });
+      let spinning = false;
+      const spin = () => {
+        if (spinning) return;
+        spinning = true;
+        chars.forEach(({ strip, final }, ci) => {
+          strip.style.transition = "transform .05s linear";
+          let step = 0;
+          const tick = () => {
+            strip.style.transform = `translateY(${-step * 1.12}em)`;
+            step++;
+            if (step <= final) {
+              setTimeout(tick, 55 + ci * 12);
+            } else {
+              strip.style.transition = "transform .45s cubic-bezier(.65,.05,.35,1)";
+              strip.style.transform = `translateY(${-final * 1.12}em)`;
+              if (ci === chars.length - 1) setTimeout(() => (spinning = false), 450);
+            }
+          };
+          setTimeout(tick, ci * 65);
+        });
+      };
+      // 首次进入视口：卡片显隐 + 轮盘滚入落定（hover 不重播——原站实测）
+      new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          el.closest(".fw-card")?.classList.add("in");
+          spin();
+        }
+      }, { threshold: 0.35 }).observe(el);
+    });
+  })();
+
+  // ---- 05 头像/选色演示联动 ----
+  (function () {
+    const avt = document.getElementById("demoAvt");
+    const myRow = document.querySelectorAll("#avRow .av-pick")[1]; // "你" 是第二个
+    document.querySelectorAll("#colorRow .cd").forEach((d) => {
+      d.addEventListener("click", () => {
+        document.querySelectorAll("#colorRow .cd").forEach((x) => x.classList.remove("sel"));
+        d.classList.add("sel");
+        const c = getComputedStyle(d).backgroundColor;
+        avt.style.background = c;
+        myRow.querySelector(".avt").style.background = c;
+      });
+    });
+    document.querySelectorAll("#avRow .av-pick").forEach((p) => {
+      p.addEventListener("click", () => {
+        document.querySelectorAll("#avRow .av-pick").forEach((x) => x.classList.remove("sel"));
+        p.classList.add("sel");
+      });
+    });
+  })();
+
+  // ---- 09 preloader 百分比演示 ----
+  (function () {
+    const el = document.getElementById("plPct");
+    let p = 0;
+    setInterval(() => {
+      p = (p + Math.floor(Math.random() * 9)) % 110;
+      el.textContent = "Loading " + Math.min(p, 100) + "%";
+    }, 260);
+  })();
+
+  // ---- 08b 表单弹窗演示状态机 ----
+  (function () {
+    const form = document.getElementById("cform");
+    if (!form) return;
+    const name = document.getElementById("cfName");
+    const mail = document.getElementById("cfMail");
+    const msg = document.getElementById("cfMsg");
+    const count = document.getElementById("cfCount");
+    const send = document.getElementById("cfSend");
+    const invalid = (input, bad) => input.closest(".cf-field").classList.toggle("invalid", bad);
+    msg.addEventListener("input", () => (count.textContent = msg.value.length + " / 500"));
+    [name, mail, msg].forEach((i) => i.addEventListener("input", () => invalid(i, false)));
+    send.addEventListener("click", () => {
+      if (send.classList.contains("busy")) return;
+      let bad = false;
+      if (!name.value.trim()) { invalid(name, true); bad = true; }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail.value)) { invalid(mail, true); bad = true; }
+      if (!msg.value.trim()) { invalid(msg, true); bad = true; }
+      if (bad) return;
+      send.classList.add("busy"); send.querySelector(".cf-send-txt").textContent = "";
+      setTimeout(() => {
+        send.classList.remove("busy");
+        form.classList.add("sent");
+        setTimeout(() => {
+          form.classList.remove("sent");
+          send.querySelector(".cf-send-txt").textContent = "发送留言";
+          name.value = mail.value = msg.value = "";
+          count.textContent = "0 / 500";
+        }, 2600);
+      }, 1400);
+    });
+  })();
+
+  // ---- 08c 联系信息行（点击复制） ----
+  (function () {
+    document.querySelectorAll(".hire-row[data-copy]").forEach((row) => {
+      row.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (navigator.clipboard) navigator.clipboard.writeText(row.dataset.copy).catch(() => {});
+        row.classList.add("copied");
+        setTimeout(() => row.classList.remove("copied"), 1200);
+      });
+    });
+  })();
+
+  // ---- 侧栏高亮 ----
+  (function () {
+    const links = [...document.querySelectorAll("aside a")];
+    links.forEach((a) =>
+      a.addEventListener("click", () => {
+        links.forEach((x) => x.classList.remove("on"));
+        a.classList.add("on");
+      })
+    );
+  })();
+</script>
+</body>
+</html>
