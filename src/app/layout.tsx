@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Unbounded } from "next/font/google";
+import { JetBrains_Mono, Space_Grotesk, Unbounded } from "next/font/google";
 import "./globals.css";
 import { config } from "@/data/config";
 import { Header } from "@/components/header";
@@ -14,6 +14,12 @@ const spaceGrotesk = Space_Grotesk({
 const unbounded = Unbounded({
   subsets: ["latin"],
   variable: "--font-display",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jbmono",
   display: "swap",
 });
 
@@ -36,7 +42,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`dark ${spaceGrotesk.variable} ${unbounded.variable} font-sans`}
+      className={`dark ${spaceGrotesk.variable} ${unbounded.variable} ${jetbrainsMono.variable} font-sans`}
     >
       <head>
         {/* Spline 运行时会从 unpkg 拉取 wasm，提前预热连接可加快 3D 场景启动。
